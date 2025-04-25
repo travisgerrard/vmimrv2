@@ -1,0 +1,334 @@
+"use client";
+
+import { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
+import { supabase } from "../lib/supabaseClient";
+import type { Session } from "@supabase/supabase-js";
+import ReactMarkdown from "react-markdown";
+import { Auth } from "@supabase/auth-ui-react";
+import { ThemeSupa } from "@supabase/auth-ui-shared";
+
+// Define Post type
+export type Post = {
+  id: string;
+  created_at: string;
+  content: string;
+  tags: string[] | null;
+  is_starred: boolean;
+  imagePaths?: string[];
+  hasPdf?: boolean;
+};
+
+function useDebounce(value: string, delay: number): string {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+type Props = {
+  initialPosts: Post[];
+};
+
+export default function PostsClient({ initialPosts }: Props) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [showOnlyStarred, setShowOnlyStarred] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loadingSession, setLoadingSession] = useState(true);
+  const [loadingPosts, setLoadingPosts] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [signedThumbnailUrls, setSignedThumbnailUrls] = useState<Record<string, string | null>>({});
+
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
+  // Fetch session and listen for changes
+  useEffect(() => {
+    setLoadingSession(true);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoadingSession(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (!session) {
+        setPosts([]);
+        setError(null);
+        setShowOnlyStarred(false);
+        setSearchTerm("");
+      }
+    });
+    return () => subscription?.unsubscribe();
+  }, []);
+
+  // Fetch posts when session is available OR when debounced search term changes
+  const fetchPosts = useCallback(
+    async (currentSession: Session | null, query: string) => {
+      if (!currentSession?.user) return;
+      setLoadingPosts(true);
+      setError(null);
+      try {
+        let queryBuilder = supabase
+          .from("posts")
+          .select("id, created_at, content, tags, is_starred")
+          .eq("user_id", currentSession.user.id);
+        if (query.trim()) {
+          queryBuilder = queryBuilder.ilike("content", `%${query.trim()}%`);
+        }
+        queryBuilder = queryBuilder.order("created_at", { ascending: false });
+        const { data: postsData, error: fetchError } = await queryBuilder;
+        if (fetchError) throw fetchError;
+        let postsWithImages: Post[] = postsData || [];
+        if (postsWithImages.length > 0) {
+          const postIds = postsWithImages.map((p) => p.id);
+          const { data: mediaFiles, error: mediaError } = await supabase
+            .from("media_files")
+            .select("post_id, file_path, file_type")
+            .in("post_id", postIds);
+          if (mediaError) {
+            // Proceed without images if media fetch fails
+          } else if (mediaFiles) {
+            const postMediaInfo: Record<string, { imagePaths: string[]; hasPdf: boolean }> = {};
+            mediaFiles.forEach((file) => {
+              if (!file.post_id || !file.file_path) return;
+              if (!postMediaInfo[file.post_id]) {
+                postMediaInfo[file.post_id] = { imagePaths: [], hasPdf: false };
+              }
+              if (file.file_type?.includes("pdf")) {
+                postMediaInfo[file.post_id].hasPdf = true;
+              }
+              if (file.file_type?.startsWith("image/")) {
+                if (!postMediaInfo[file.post_id].imagePaths.includes(file.file_path)) {
+                  postMediaInfo[file.post_id].imagePaths.push(file.file_path);
+                }
+              }
+            });
+            postsWithImages = postsWithImages.map((post) => ({
+              ...post,
+              imagePaths: postMediaInfo[post.id]?.imagePaths || [],
+              hasPdf: postMediaInfo[post.id]?.hasPdf || false,
+            }));
+          }
+        }
+        setPosts(postsWithImages);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "An unknown error occurred";
+        setError(`Failed to load posts: ${message}`);
+        setPosts([]);
+      } finally {
+        setLoadingPosts(false);
+      }
+    },
+    []
+  );
+
+  // Effect to trigger fetchPosts based on session and debounced search term
+  useEffect(() => {
+    if (session) {
+      fetchPosts(session, debouncedSearchTerm);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, debouncedSearchTerm]);
+
+  // Effect to fetch signed URLs for all unique image paths when posts change
+  useEffect(() => {
+    const fetchAllSignedUrls = async () => {
+      const uniquePaths = new Set<string>();
+      posts.forEach((post) => {
+        post.imagePaths?.forEach((path) => {
+          if (path) uniquePaths.add(path);
+        });
+      });
+      if (uniquePaths.size === 0) {
+        setSignedThumbnailUrls({});
+        return;
+      }
+      const urlsMap: Record<string, string | null> = {};
+      const fetchPromises = Array.from(uniquePaths).map(async (path) => {
+        try {
+          const { data, error } = await supabase.storage
+            .from("post-media")
+            .createSignedUrl(path, 60 * 5);
+          if (error) throw error;
+          urlsMap[path] = data.signedUrl;
+        } catch {
+          urlsMap[path] = null;
+        }
+      });
+      await Promise.all(fetchPromises);
+      setSignedThumbnailUrls((prevUrls) => ({ ...prevUrls, ...urlsMap }));
+    };
+    fetchAllSignedUrls();
+  }, [posts]);
+
+  const handleLogout = async () => {
+    setLoadingSession(true);
+    await supabase.auth.signOut();
+    setSession(null);
+    setPosts([]);
+    setError(null);
+    setShowOnlyStarred(false);
+    setSearchTerm("");
+    setLoadingSession(false);
+  };
+
+  const filteredPosts = useMemo(() => {
+    if (showOnlyStarred) {
+      return posts.filter((p) => p.is_starred);
+    }
+    return posts;
+  }, [posts, showOnlyStarred]);
+
+  const renderPostsList = () => {
+    if (loadingPosts) {
+      return <p className="text-center text-gray-500">Loading posts...</p>;
+    }
+    if (error) {
+      return <p className="text-center text-red-600">{error}</p>;
+    }
+    if (posts.length === 0 && !searchTerm.trim()) {
+      return (
+        <p className="text-center text-gray-500">
+          You haven&apos;t created any posts yet.
+          <Link href="/posts/new" legacyBehavior>
+            <a className="text-blue-600 hover:underline ml-1">Create one now!</a>
+          </Link>
+        </p>
+      );
+    }
+    if (posts.length === 0 && searchTerm.trim()) {
+      return (
+        <p className="text-center text-gray-500">
+          No posts found matching &quot;{searchTerm}&quot;.
+        </p>
+      );
+    }
+    if (filteredPosts.length === 0 && showOnlyStarred) {
+      return (
+        <p className="text-center text-gray-500">
+          You have no starred posts {searchTerm.trim() ? `matching "${searchTerm}"` : ''}.
+        </p>
+      );
+    }
+    if (filteredPosts.length > 0) {
+      return (
+        <div className="space-y-4">
+          {filteredPosts.map((post) => (
+            <Link key={post.id} href={`/posts/${post.id}`} legacyBehavior>
+              <a className="block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150 cursor-pointer">
+                <div className="prose max-w-none mb-4 text-gray-700">
+                  <ReactMarkdown>
+                    {post.content.substring(0, 200) + (post.content.length > 200 ? "..." : "")}
+                  </ReactMarkdown>
+                </div>
+                {post.imagePaths && post.imagePaths.length > 0 && (
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {post.imagePaths.slice(0, 4).map((path, index) => {
+                      const signedUrl = signedThumbnailUrls[path];
+                      return (
+                        <div key={index} className="w-full h-32 bg-gray-100 rounded flex items-center justify-center">
+                          {signedUrl === undefined ? (
+                            <span className="text-xs text-gray-500">...</span>
+                          ) : signedUrl ? (
+                            <img
+                              src={signedUrl}
+                              alt={`Post thumbnail ${index + 1}`}
+                              className="w-full h-full object-contain rounded"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="text-xs text-red-500">!</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="text-xs text-gray-500 flex justify-between items-center mt-4 pt-3 border-t border-gray-100">
+                  <span className="flex items-center">
+                    {post.hasPdf && <span className="mr-2" title="Contains PDF">📄</span>}
+                    {new Date(post.created_at).toLocaleString()}
+                  </span>
+                  <span className={`ml-2 ${post.is_starred ? "text-yellow-500" : "text-gray-400"}`}>
+                    {post.is_starred ? "★" : "☆"}
+                  </span>
+                </div>
+              </a>
+            </Link>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  if (loadingSession) {
+    return (
+      <main className="container mx-auto p-4 md:p-8 text-center">
+        <p className="text-gray-500">Loading session...</p>
+      </main>
+    );
+  }
+
+  if (!session) {
+    const isDarkMode = typeof window !== "undefined" && document.documentElement.classList.contains("dark");
+    return (
+      <main className="container mx-auto p-4 md:p-8 flex justify-center items-center min-h-[calc(100vh-10rem)]">
+        <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md">
+          <h1 className="text-2xl font-bold mb-6 text-center text-gray-900">Welcome</h1>
+          <Auth
+            supabaseClient={supabase}
+            appearance={{ theme: ThemeSupa }}
+            view="magic_link"
+            providers={[]}
+            showLinks={false}
+            theme={isDarkMode ? "dark" : "default"}
+          />
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="container mx-auto p-4 md:p-8 font-sans">
+      <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">Your Posts</h1>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowOnlyStarred(!showOnlyStarred)}
+            className={`px-4 py-2 rounded border border-gray-300 text-sm font-medium transition-colors disabled:opacity-50 ${
+              showOnlyStarred
+                ? "bg-yellow-400 border-yellow-500 text-yellow-900 hover:bg-yellow-300"
+                : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            {showOnlyStarred ? "★ Show All" : "☆ Show Starred"}
+          </button>
+          <Link href="/posts/new" legacyBehavior>
+            <a className="inline-flex items-center px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              + New Post
+            </a>
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center px-4 py-2 rounded border border-red-600 bg-red-500 text-white hover:bg-red-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          >
+            Logout {session?.user?.email ? `(${session.user.email.split("@")[0]})` : ""}
+          </button>
+        </div>
+      </div>
+      <div className="mb-6">
+        <input
+          type="search"
+          placeholder="Search posts by content or tags..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 placeholder-gray-500"
+        />
+      </div>
+      {renderPostsList()}
+    </main>
+  );
+} 

@@ -7,6 +7,7 @@ import { supabase } from '../../../lib/supabaseClient'; // Correct relative path
 import ReactMarkdown from 'react-markdown';
 import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
 import type { Session } from '@supabase/supabase-js'; // Import Session type
+import Image from 'next/image';
 
 // Define MediaFile type
 type MediaFile = {
@@ -35,13 +36,14 @@ export default function PostDetailPage() {
   const [session, setSession] = useState<Session | null>(null); // Add session state
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isStarred, setIsStarred] = useState(false);
-  const [secretUrl, setSecretUrl] = useState<string | null>(null); // State for share URL
+  const [secretUrl, setSecretUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [togglingStar, setTogglingStar] = useState(false);
-  const [generatingLink, setGeneratingLink] = useState(false); // Loading state for link generation
-  const [deleting, setDeleting] = useState(false); // Loading state for deletion
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [signedImageUrls, setSignedImageUrls] = useState<Record<string, string | null>>({}); // State for signed URLs
+  const [signedImageUrls, setSignedImageUrls] = useState<Record<string, string | null>>({});
+  const [isSummarizationPending, setIsSummarizationPending] = useState(false); // Track summary status
   const [revokingLink, setRevokingLink] = useState(false); // State for revoke loading
   const params = useParams();
   const router = useRouter();
@@ -140,14 +142,33 @@ export default function PostDetailPage() {
              console.error('Error fetching media files from Supabase:', fetchError);
              throw fetchError;
         }
-        setMediaFiles(data || []);
+        const fetchedMedia = data || [];
+        setMediaFiles(fetchedMedia);
+        // Check if summarization might be pending after fetching post and media
+        checkSummaryStatus(post, fetchedMedia); // Use correct function name
      } catch (err) {
         console.error('Error fetching media files:', err);
         const message = err instanceof Error ? err.message : 'An unknown error occurred fetching media';
         setError(prev => prev || `Failed to load media files: ${message}`);
         setMediaFiles([]);
+        setIsSummarizationPending(false); // Ensure pending is false on error
      }
   };
+  // Helper function to determine initial summary status (pending, error, or complete)
+  const checkSummaryStatus = (currentPost: Post | null, currentMedia: MediaFile[]) => {
+      if (currentPost && !currentPost.summary) {
+          // No summary yet, check if a PDF exists to determine if pending
+          const hasPdf = currentMedia.some(file => file.file_type?.includes('pdf'));
+          setIsSummarizationPending(hasPdf); // Pending if PDF exists and summary is null/empty
+      } else if (currentPost && currentPost.summary?.startsWith('Error:')) {
+          // Summary field contains our error marker
+          setIsSummarizationPending(false); // Not pending, but indicates error
+      }
+      else {
+          setIsSummarizationPending(false); // Has summary or no PDF
+      }
+  };
+
 
    const getMediaUrl = useCallback(async (filePath: string): Promise<string | null> => {
        try {
@@ -302,7 +323,52 @@ export default function PostDetailPage() {
        }
      };
      fetchSignedUrls();
-   }, [mediaFiles, getMediaUrl]);
+   }, [mediaFiles, getMediaUrl]); // Keep existing dependencies
+
+   // --- Realtime Subscription for Post Updates (Summary) ---
+   useEffect(() => {
+       if (!postId) return;
+
+       // Initial check when post data is first loaded
+       checkSummaryStatus(post, mediaFiles); // Use correct function name
+
+       const channel = supabase
+           .channel(`post_updates_${postId}`)
+           .on<Post>(
+               'postgres_changes',
+               {
+                   event: 'UPDATE',
+                   schema: 'public',
+                   table: 'posts',
+                   filter: `id=eq.${postId}`
+               },
+               (payload) => {
+                   console.log('Realtime UPDATE received:', payload);
+                   const updatedPost = payload.new as Post;
+                   // Update local state only if the fetched post exists and summary has changed
+                   if (post && updatedPost.summary !== post.summary) {
+                        setPost(prevPost => prevPost ? { ...prevPost, summary: updatedPost.summary, updated_at: updatedPost.updated_at } : null);
+                        setIsSummarizationPending(false); // Summary has arrived
+                        console.log('Summary updated via realtime.');
+                   }
+               }
+           )
+           .subscribe((status, err) => {
+                if (status === 'SUBSCRIBED') {
+                   console.log(`Realtime channel subscribed for post ${postId}`);
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                   console.error('Realtime subscription error:', status, err);
+                   setError(prev => prev || 'Connection issue fetching live updates.');
+                }
+           });
+
+       // Cleanup subscription on component unmount
+       return () => {
+           console.log(`Unsubscribing from realtime channel for post ${postId}`);
+           supabase.removeChannel(channel);
+       };
+   }, [postId, post, mediaFiles]); // Add post and mediaFiles to dependencies for initial check
 
    if (loading) {
      return <div className="p-8 text-center">Loading post details...</div>;
@@ -391,8 +457,29 @@ export default function PostDetailPage() {
         <ReactMarkdown>{post.content}</ReactMarkdown>
       </article>
 
+       {/* --- Summary Section Moved Here (Handles Pending/Error/Success) --- */}
+       <div className="mt-4 mb-6"> {/* Added mb-6 */}
+         {isSummarizationPending && !post.summary?.startsWith('Error:') && (
+             <div className="p-4 border-l-4 border-yellow-300 bg-yellow-50 rounded text-sm text-yellow-700">
+                 Summary generation in progress...
+             </div>
+         )}
+         {post.summary?.startsWith('Error:') && (
+             <div className="p-4 border-l-4 border-red-300 bg-red-50 rounded text-sm text-red-700">
+                 <h3 className="font-semibold text-red-800">Summarization Failed:</h3>
+                 <p className="mt-1">{post.summary}</p> {/* Display the error message */}
+             </div>
+         )}
+         {post.summary && !post.summary.startsWith('Error:') && (
+            <div className="p-4 border-l-4 border-blue-300 bg-blue-50 rounded">
+                <h3 className="font-semibold text-blue-700">Summary:</h3>
+                <div className="mt-1 text-sm text-gray-700 prose prose-sm max-w-none"><ReactMarkdown>{post.summary}</ReactMarkdown></div>
+            </div>
+         )}
+       </div>
+       {/* --- End Summary Section --- */}
       {imageFiles.length > 0 && (
-        <div className="mb-6 space-y-4">
+        <div className="mb-6 mt-6 space-y-4"> {/* Added mt-6 for spacing */}
           {imageFiles.map(file => {
             const imageUrl = signedImageUrls[file.id];
             return (
@@ -400,7 +487,15 @@ export default function PostDetailPage() {
                 {imageUrl === undefined ? (
                   <div className="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 animate-pulse">Loading Image...</div>
                 ) : imageUrl ? (
-                  <img src={imageUrl} alt={file.file_name} className="w-full max-w-full h-auto rounded-lg shadow" loading="lazy"/>
+                  <Image
+                    src={imageUrl}
+                    alt={file.file_name}
+                    className="w-full max-w-full h-auto rounded-lg shadow"
+                    width={512}
+                    height={256}
+                    loading="lazy"
+                    unoptimized
+                  />
                 ) : (
                   <div className="w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">Image Preview Unavailable</div>
                 )}
@@ -446,12 +541,7 @@ export default function PostDetailPage() {
                 ))}
             </div>
         )}
-         {post.summary && (
-            <div className="mt-4 p-4 border-l-4 border-blue-300 bg-blue-50 rounded">
-                <h3 className="font-semibold text-blue-700">Summary:</h3>
-                <p className="mt-1 text-sm text-gray-700">{post.summary}</p>
-            </div>
-         )}
+         {/* Removed duplicate summary rendering logic from here */}
       </div>
     </div>
   );

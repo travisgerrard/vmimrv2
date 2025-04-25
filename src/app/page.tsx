@@ -55,7 +55,7 @@ export default async function Home() {
         }));
       }
     }
-  } catch (err) {
+  } catch {
     // Optionally log error
   }
 

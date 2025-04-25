@@ -7,6 +7,7 @@ import type { Session } from "@supabase/supabase-js";
 import ReactMarkdown from "react-markdown";
 import { Auth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
+import Image from "next/image";
 
 // Define Post type
 export type Post = {
@@ -232,11 +233,14 @@ export default function PostsClient({ initialPosts }: Props) {
                           {signedUrl === undefined ? (
                             <span className="text-xs text-gray-500">...</span>
                           ) : signedUrl ? (
-                            <img
+                            <Image
                               src={signedUrl}
                               alt={`Post thumbnail ${index + 1}`}
                               className="w-full h-full object-contain rounded"
+                              width={128}
+                              height={128}
                               loading="lazy"
+                              unoptimized
                             />
                           ) : (
                             <span className="text-xs text-red-500">!</span>

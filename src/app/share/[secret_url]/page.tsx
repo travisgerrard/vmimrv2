@@ -166,8 +166,8 @@ export default function SharePage() {
           }
         }
       `}</style>
-      <h2 className="text-xl font-semibold mb-4 text-center text-gray-700 dark:text-gray-300 print:hidden">Shared Medical Reference Post</h2>
-      <div className="flex justify-end mb-4 print:hidden">
+      <div className="flex items-center justify-between mb-4 print:hidden">
+        <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 m-0">Shared Medical Reference Post</h2>
         <button
           onClick={() => window.print()}
           className="px-4 py-2 rounded border border-gray-400 bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors shadow-sm print:hidden"

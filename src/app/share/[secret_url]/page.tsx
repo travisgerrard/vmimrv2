@@ -153,6 +153,14 @@ export default function SharePage() {
         </Head>
 
       <h2 className="text-xl font-semibold mb-4 text-center text-gray-700 dark:text-gray-300">Shared Medical Reference Post</h2>
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={() => window.print()}
+          className="px-4 py-2 rounded border border-gray-400 bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors shadow-sm print:hidden"
+        >
+          🖨️ Print
+        </button>
+      </div>
 
       <article className="prose dark:prose-invert lg:prose-xl max-w-none bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>

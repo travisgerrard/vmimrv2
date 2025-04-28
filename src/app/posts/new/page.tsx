@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../../../lib/supabaseClient'; // Correct relative path
+import { supabase } from '../../../lib/supabaseClient'; // Correct relative path, removed unused supabaseUrl
 import type { Session } from '@supabase/supabase-js';
 import ReactMarkdown from 'react-markdown';
 import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
+import remarkGfm from 'remark-gfm';
 
 export default function NewPostPage() {
   const [session, setSession] = useState<Session | null>(null);
@@ -179,6 +180,7 @@ export default function NewPostPage() {
           }
 
           if (uploadSuccessful) {
+              const fileType = file.type || 'application/octet-stream';
               const { error: mediaInsertError } = await supabase
                 .from('media_files')
                 .insert({
@@ -186,20 +188,44 @@ export default function NewPostPage() {
                   user_id: session.user.id,
                   file_path: filePath,
                   file_name: file.name,
-                  file_type: file.type || 'application/octet-stream',
+                  file_type: fileType,
                 });
-              if (mediaInsertError) console.error(`[Upload Loop ${index}] Failed to insert media record for ${file.name}:`, mediaInsertError);
-              else console.log(`[Upload Loop ${index}] Successfully inserted DB record for: ${file.name}`);
+
+              if (mediaInsertError) {
+                 console.error(`[Upload Loop ${index}] Failed to insert media record for ${file.name}:`, mediaInsertError);
+              } else {
+                 console.log(`[Upload Loop ${index}] Successfully inserted DB record for: ${file.name}`);
+                 // --- Trigger Summarization from Frontend ---
+                 if (fileType.includes('pdf')) {
+                    console.log(`[Upload Loop ${index}] Triggering summarization for PDF: ${file.name}`);
+                    // Invoke function asynchronously, don't wait for it here
+                    supabase.functions.invoke('summarize-document', {
+                       body: { postId: postId, filePath: filePath, fileType: fileType },
+                    }).then(({ data, error }) => {
+                       if (error) console.error(`[Summarize Trigger ${index}] Error for ${file.name}:`, error);
+                       else console.log(`[Summarize Trigger ${index}] Function invoked for ${file.name}:`, data);
+                    });
+                 }
+                 // --- End Summarization Trigger ---
+              }
           } else {
               console.log(`[Upload Loop ${index}] Skipping DB insert for ${file.name} due to upload failure.`);
           }
         });
-        await Promise.all(uploadPromises);
+        await Promise.all(uploadPromises); // Wait for all uploads and DB inserts/function triggers
         setUploadProgress("Uploads complete!");
+
+        // --- REMOVED: Append Links to Content ---
+        // This logic was removed because the post detail page already displays
+        // attachments in a dedicated section, preventing duplication.
+        // The summary is handled separately by the Edge Function.
+        // --- End REMOVED ---
+
       } else {
          setUploadProgress("Uploads complete!"); // Set progress even if no files
       }
-      router.push(`/posts/${postId}`);
+
+      router.push(`/posts/${postId}`); // Redirect after everything
     } catch (err) {
       console.error('Error saving post or uploading files:', err);
       const message = err instanceof Error ? err.message : 'An unknown error occurred';
@@ -287,7 +313,7 @@ export default function NewPostPage() {
               Preview
             </label>
             <div className="prose p-3 border border-gray-300 rounded-md min-h-[300px] bg-white overflow-auto text-gray-700">
-              <ReactMarkdown>{content || "Preview will appear here..."}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || "Preview will appear here..."}</ReactMarkdown>
             </div>
           </div>
         </div>

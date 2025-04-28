@@ -6,6 +6,7 @@ import { supabase } from '../../../../lib/supabaseClient'; // Adjusted relative 
 import type { Session } from '@supabase/supabase-js';
 import ReactMarkdown from 'react-markdown';
 import { v4 as uuidv4 } from 'uuid';
+import remarkGfm from 'remark-gfm';
 
 // Define Post type (can be shared if moved to a types file)
 type Post = {
@@ -311,7 +312,7 @@ export default function EditPostPage() { // Renamed component
               Preview
             </label>
             <div className="prose p-3 border border-gray-300 rounded-md min-h-[300px] bg-white overflow-auto text-gray-700">
-              <ReactMarkdown>{content || "Preview will appear here..."}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || "Preview will appear here..."}</ReactMarkdown>
             </div>
           </div>
         </div>

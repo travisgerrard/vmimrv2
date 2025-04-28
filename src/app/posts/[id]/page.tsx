@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient'; // Correct relative path
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
 import type { Session } from '@supabase/supabase-js'; // Import Session type
 import Image from 'next/image';
@@ -454,7 +455,7 @@ export default function PostDetailPage() {
        {error && <p className="text-red-600 text-sm mb-4">Note: {error}</p>}
 
       <article className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6">
-        <ReactMarkdown>{post.content}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
       </article>
 
        {/* --- Summary Section Moved Here (Handles Pending/Error/Success) --- */}
@@ -473,7 +474,7 @@ export default function PostDetailPage() {
          {post.summary && !post.summary.startsWith('Error:') && (
             <div className="p-4 border-l-4 border-blue-300 bg-blue-50 rounded">
                 <h3 className="font-semibold text-blue-700">Summary:</h3>
-                <div className="mt-1 text-sm text-gray-700 prose prose-sm max-w-none"><ReactMarkdown>{post.summary}</ReactMarkdown></div>
+                <div className="mt-1 text-sm text-gray-700 prose prose-sm max-w-none"><ReactMarkdown remarkPlugins={[remarkGfm]}>{post.summary}</ReactMarkdown></div>
             </div>
          )}
        </div>

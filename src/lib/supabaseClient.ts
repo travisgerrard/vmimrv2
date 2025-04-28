@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 // --- TEMPORARY DEBUGGING ---
 // Ensure environment variables are defined
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL; // Export the URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl) {

@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Head from 'next/head'; // Import Head for meta tags
 import { supabase } from '../../../lib/supabaseClient'; // Correct relative path
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // Reuse types (consider moving to a shared file)
 type MediaFile = {
@@ -154,7 +155,7 @@ export default function SharePage() {
       <h2 className="text-xl font-semibold mb-4 text-center text-gray-700 dark:text-gray-300">Shared Medical Reference Post</h2>
 
       <article className="prose dark:prose-invert lg:prose-xl max-w-none bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
-        <ReactMarkdown>{post.content}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
       </article>
 
       {/* Media Files Section */}

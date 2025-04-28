@@ -8,6 +8,7 @@ import ReactMarkdown from "react-markdown";
 import { Auth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
 import Image from "next/image";
+import remarkGfm from 'remark-gfm';
 
 // Define Post type
 export type Post = {
@@ -220,7 +221,7 @@ export default function PostsClient({ initialPosts }: Props) {
             <Link key={post.id} href={`/posts/${post.id}`} legacyBehavior>
               <a className="block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150 cursor-pointer">
                 <div className="prose max-w-none mb-4 text-gray-700">
-                  <ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {post.content.substring(0, 200) + (post.content.length > 200 ? "..." : "")}
                   </ReactMarkdown>
                 </div>

@@ -152,8 +152,22 @@ export default function SharePage() {
             <title>Shared Medical Reference</title> {/* Generic title */}
         </Head>
 
-      <h2 className="text-xl font-semibold mb-4 text-center text-gray-700 dark:text-gray-300">Shared Medical Reference Post</h2>
-      <div className="flex justify-end mb-4">
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          .print-content, .print-content * {
+            visibility: visible !important;
+          }
+          .print-content {
+            position: absolute !important;
+            left: 0; top: 0; width: 100vw;
+          }
+        }
+      `}</style>
+      <h2 className="text-xl font-semibold mb-4 text-center text-gray-700 dark:text-gray-300 print:hidden">Shared Medical Reference Post</h2>
+      <div className="flex justify-end mb-4 print:hidden">
         <button
           onClick={() => window.print()}
           className="px-4 py-2 rounded border border-gray-400 bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors shadow-sm print:hidden"
@@ -162,7 +176,7 @@ export default function SharePage() {
         </button>
       </div>
 
-      <article className="prose dark:prose-invert lg:prose-xl max-w-none bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
+      <article className="prose print-content dark:prose-invert lg:prose-xl max-w-none bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
       </article>
 
@@ -191,7 +205,7 @@ export default function SharePage() {
       )}
 
       {/* Metadata Section (Optional for shared view) */}
-      <div className="mt-6 text-xs text-gray-500 dark:text-gray-400 border-t dark:border-gray-700 pt-4">
+      <div className="mt-6 text-xs text-gray-500 dark:text-gray-400 border-t dark:border-gray-700 pt-4 print:hidden">
         <p>Post created: {new Date(post.created_at).toLocaleDateString()}</p>
         {/* Maybe hide tags/summary/updated_at from public view unless desired */}
       </div>

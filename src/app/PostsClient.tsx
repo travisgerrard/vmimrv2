@@ -277,7 +277,7 @@ export default function PostsClient({ initialPosts }: Props) {
   };
 
   const renderPostsList = () => {
-    if (loadingPosts) {
+    if (posts.length === 0 && loadingPosts) {
       return <p className="text-center text-gray-500">Loading posts...</p>;
     }
     if (error) {

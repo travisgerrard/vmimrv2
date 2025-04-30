@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
@@ -46,7 +46,6 @@ export default function PostsClient({ initialPosts }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [signedThumbnailUrls, setSignedThumbnailUrls] = useState<Record<string, string | null>>({});
   const postsContainerRef = useRef<HTMLDivElement | null>(null);
-  const [scrollRestored, setScrollRestored] = useState(false);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -176,17 +175,23 @@ export default function PostsClient({ initialPosts }: Props) {
     }
   }, []);
 
-  // Restore scroll position after posts are rendered in the DOM
-  useLayoutEffect(() => {
-    if (!scrollRestored && posts.length > 0 && postsContainerRef.current) {
+  // Restore scroll position robustly: wait until posts are rendered in the DOM
+  useEffect(() => {
+    let raf: number | null = null;
+    function tryRestoreScroll() {
       const saved = sessionStorage.getItem('postsScroll');
-      if (saved) {
+      if (saved && postsContainerRef.current && postsContainerRef.current.children.length > 0) {
         window.scrollTo(0, parseInt(saved, 10));
         sessionStorage.removeItem('postsScroll');
-        setScrollRestored(true);
+      } else if (saved) {
+        raf = requestAnimationFrame(tryRestoreScroll);
       }
     }
-  }, [posts, scrollRestored]);
+    tryRestoreScroll();
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [posts]);
 
   // Background refresh: fetch new posts and prepend if found
   useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
@@ -69,74 +69,67 @@ export default function PostsClient({ initialPosts }: Props) {
     return () => subscription?.unsubscribe();
   }, []);
 
-  // Fetch posts when session is available OR when debounced search term changes
-  const fetchPosts = useCallback(
-    async (currentSession: Session | null, query: string) => {
-      if (!currentSession?.user) return;
-      setLoadingPosts(true);
-      setError(null);
-      try {
-        let queryBuilder = supabase
-          .from("posts")
-          .select("id, created_at, content, tags, is_starred")
-          .eq("user_id", currentSession.user.id);
-        if (query.trim()) {
-          queryBuilder = queryBuilder.ilike("content", `%${query.trim()}%`);
-        }
-        queryBuilder = queryBuilder.order("created_at", { ascending: false });
-        const { data: postsData, error: fetchError } = await queryBuilder;
-        if (fetchError) throw fetchError;
-        let postsWithImages: Post[] = postsData || [];
-        if (postsWithImages.length > 0) {
-          const postIds = postsWithImages.map((p) => p.id);
-          const { data: mediaFiles, error: mediaError } = await supabase
-            .from("media_files")
-            .select("post_id, file_path, file_type")
-            .in("post_id", postIds);
-          if (mediaError) {
-            // Proceed without images if media fetch fails
-          } else if (mediaFiles) {
-            const postMediaInfo: Record<string, { imagePaths: string[]; hasPdf: boolean }> = {};
-            mediaFiles.forEach((file) => {
-              if (!file.post_id || !file.file_path) return;
-              if (!postMediaInfo[file.post_id]) {
-                postMediaInfo[file.post_id] = { imagePaths: [], hasPdf: false };
-              }
-              if (file.file_type?.includes("pdf")) {
-                postMediaInfo[file.post_id].hasPdf = true;
-              }
-              if (file.file_type?.startsWith("image/")) {
-                if (!postMediaInfo[file.post_id].imagePaths.includes(file.file_path)) {
-                  postMediaInfo[file.post_id].imagePaths.push(file.file_path);
-                }
-              }
-            });
-            postsWithImages = postsWithImages.map((post) => ({
-              ...post,
-              imagePaths: postMediaInfo[post.id]?.imagePaths || [],
-              hasPdf: postMediaInfo[post.id]?.hasPdf || false,
-            }));
-          }
-        }
-        setPosts(postsWithImages);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "An unknown error occurred";
-        setError(`Failed to load posts: ${message}`);
-        setPosts([]);
-      } finally {
-        setLoadingPosts(false);
-      }
-    },
-    []
-  );
-
-  // Effect to trigger fetchPosts based on session and debounced search term
+  // Fetch posts when session is available OR when debounced search term or starred filter changes
   useEffect(() => {
     if (session) {
-      fetchPosts(session, debouncedSearchTerm);
+      const fetchAndSetPosts = async () => {
+        setLoadingPosts(true);
+        setError(null);
+        try {
+          let queryBuilder = supabase
+            .from("posts")
+            .select("id, created_at, content, tags, is_starred")
+            .eq("user_id", session.user.id);
+          if (debouncedSearchTerm.trim()) {
+            queryBuilder = queryBuilder.ilike("content", `%${debouncedSearchTerm.trim()}%`);
+          }
+          queryBuilder = queryBuilder.order("created_at", { ascending: false });
+          const { data: postsData, error: fetchError } = await queryBuilder;
+          if (fetchError) throw fetchError;
+          let postsWithImages: Post[] = postsData || [];
+          if (postsWithImages.length > 0) {
+            const postIds = postsWithImages.map((p) => p.id);
+            const { data: mediaFiles, error: mediaError } = await supabase
+              .from("media_files")
+              .select("post_id, file_path, file_type")
+              .in("post_id", postIds);
+            if (!mediaError && mediaFiles) {
+              const postMediaInfo: Record<string, { imagePaths: string[]; hasPdf: boolean }> = {};
+              mediaFiles.forEach((file) => {
+                if (!file.post_id || !file.file_path) return;
+                if (!postMediaInfo[file.post_id]) {
+                  postMediaInfo[file.post_id] = { imagePaths: [], hasPdf: false };
+                }
+                if (file.file_type?.includes("pdf")) {
+                  postMediaInfo[file.post_id].hasPdf = true;
+                }
+                if (file.file_type?.startsWith("image/")) {
+                  if (!postMediaInfo[file.post_id].imagePaths.includes(file.file_path)) {
+                    postMediaInfo[file.post_id].imagePaths.push(file.file_path);
+                  }
+                }
+              });
+              postsWithImages = postsWithImages.map((post) => ({
+                ...post,
+                imagePaths: postMediaInfo[post.id]?.imagePaths || [],
+                hasPdf: postMediaInfo[post.id]?.hasPdf || false,
+              }));
+            }
+          }
+          setPosts(postsWithImages);
+          sessionStorage.setItem('postsCache', JSON.stringify(postsWithImages));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "An unknown error occurred";
+          setError(`Failed to load posts: ${message}`);
+          setPosts([]);
+        } finally {
+          setLoadingPosts(false);
+        }
+      };
+      fetchAndSetPosts();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, debouncedSearchTerm]);
+  }, [session, debouncedSearchTerm, showOnlyStarred]);
 
   // Effect to fetch signed URLs for all unique image paths when posts change
   useEffect(() => {
@@ -264,19 +257,16 @@ export default function PostsClient({ initialPosts }: Props) {
     setLoadingSession(false);
   };
 
-  const filteredPosts = useMemo(() => {
-    if (showOnlyStarred) {
-      return posts.filter((p) => p.is_starred);
-    }
-    return posts;
-  }, [posts, showOnlyStarred]);
-
   const handlePostClick = (postId: string) => {
     sessionStorage.setItem('postsScroll', window.scrollY.toString());
     router.push(`/posts/${postId}`);
   };
 
   const renderPostsList = () => {
+    let visiblePosts = posts;
+    if (showOnlyStarred) {
+      visiblePosts = visiblePosts.filter((p) => p.is_starred);
+    }
     if (posts.length === 0 && loadingPosts) {
       return <p className="text-center text-gray-500">Loading posts...</p>;
     }
@@ -300,17 +290,17 @@ export default function PostsClient({ initialPosts }: Props) {
         </p>
       );
     }
-    if (filteredPosts.length === 0 && showOnlyStarred) {
+    if (visiblePosts.length === 0 && showOnlyStarred) {
       return (
         <p className="text-center text-gray-500">
           You have no starred posts {searchTerm.trim() ? `matching "${searchTerm}"` : ''}.
         </p>
       );
     }
-    if (filteredPosts.length > 0) {
+    if (visiblePosts.length > 0) {
       return (
         <div ref={postsContainerRef} className="space-y-4">
-          {filteredPosts.map((post) => (
+          {visiblePosts.map((post) => (
             <a
               key={post.id}
               className="block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150 cursor-pointer"

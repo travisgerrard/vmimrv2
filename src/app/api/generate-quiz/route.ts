@@ -64,12 +64,14 @@ ${notesForPrompt}`;
   const data = await openaiRes.json();
   let quizJson = null;
   try {
-    // Try to extract JSON from the response
-    const text = data.choices?.[0]?.message?.content || '';
+    let text = data.choices?.[0]?.message?.content || '';
+    // Remove code block markers if present
+    text = text.replace(/```json|```/g, '').trim();
+    // Try to extract the first JSON array
     const match = text.match(/\[([\s\S]*?)\]/);
-    quizJson = match ? JSON.parse(match[1]) : JSON.parse(text);
+    quizJson = match ? JSON.parse('[' + match[1] + ']') : JSON.parse(text);
   } catch (e) {
-    return NextResponse.json({ error: 'Failed to parse OpenAI response', details: e }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to parse OpenAI response', details: e, raw: data.choices?.[0]?.message?.content }, { status: 500 });
   }
 
   return NextResponse.json({ questions: quizJson });

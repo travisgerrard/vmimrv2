@@ -38,13 +38,25 @@ type Props = {
 export default function PostsClient({ initialPosts }: Props) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
-  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [posts, setPosts] = useState<Post[]>(() => {
+    // Try to load cached posts from sessionStorage
+    const cached = sessionStorage.getItem('postsCache');
+    if (cached) {
+      try {
+        return JSON.parse(cached) as Post[];
+      } catch {
+        return initialPosts;
+      }
+    }
+    return initialPosts;
+  });
   const [showOnlyStarred, setShowOnlyStarred] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingSession, setLoadingSession] = useState(true);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signedThumbnailUrls, setSignedThumbnailUrls] = useState<Record<string, string | null>>({});
+  const [postsRendered, setPostsRendered] = useState(false);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -167,14 +179,86 @@ export default function PostsClient({ initialPosts }: Props) {
     fetchAllSignedUrls();
   }, [posts]);
 
-  // Restore scroll position on mount
+  // Restore scroll position after posts are rendered
   useEffect(() => {
-    const saved = sessionStorage.getItem('postsScroll');
-    if (saved) {
-      window.scrollTo(0, parseInt(saved, 10));
-      sessionStorage.removeItem('postsScroll');
+    if (postsRendered) {
+      const saved = sessionStorage.getItem('postsScroll');
+      if (saved) {
+        window.scrollTo(0, parseInt(saved, 10));
+        sessionStorage.removeItem('postsScroll');
+      }
     }
-  }, []);
+  }, [postsRendered]);
+
+  // Mark posts as rendered after DOM update
+  useEffect(() => {
+    setPostsRendered(false);
+    const id = setTimeout(() => setPostsRendered(true), 0);
+    return () => clearTimeout(id);
+  }, [posts]);
+
+  // Save posts to cache whenever they change
+  useEffect(() => {
+    sessionStorage.setItem('postsCache', JSON.stringify(posts));
+  }, [posts]);
+
+  // Background refresh: fetch new posts and prepend if found
+  useEffect(() => {
+    if (!session) return;
+    (async () => {
+      try {
+        const queryBuilder = supabase
+          .from("posts")
+          .select("id, created_at, content, tags, is_starred")
+          .eq("user_id", session.user.id)
+          .order("created_at", { ascending: false });
+        const { data: postsData, error: fetchError } = await queryBuilder;
+        if (fetchError) throw fetchError;
+        let postsWithImages: Post[] = postsData || [];
+        if (postsWithImages.length > 0) {
+          const postIds = postsWithImages.map((p) => p.id);
+          const { data: mediaFiles, error: mediaError } = await supabase
+            .from("media_files")
+            .select("post_id, file_path, file_type")
+            .in("post_id", postIds);
+          if (!mediaError && mediaFiles) {
+            const postMediaInfo: Record<string, { imagePaths: string[]; hasPdf: boolean }> = {};
+            mediaFiles.forEach((file) => {
+              if (!file.post_id || !file.file_path) return;
+              if (!postMediaInfo[file.post_id]) {
+                postMediaInfo[file.post_id] = { imagePaths: [], hasPdf: false };
+              }
+              if (file.file_type?.includes("pdf")) {
+                postMediaInfo[file.post_id].hasPdf = true;
+              }
+              if (file.file_type?.startsWith("image/")) {
+                if (!postMediaInfo[file.post_id].imagePaths.includes(file.file_path)) {
+                  postMediaInfo[file.post_id].imagePaths.push(file.file_path);
+                }
+              }
+            });
+            postsWithImages = postsWithImages.map((post) => ({
+              ...post,
+              imagePaths: postMediaInfo[post.id]?.imagePaths || [],
+              hasPdf: postMediaInfo[post.id]?.hasPdf || false,
+            }));
+          }
+        }
+        // Prepend new posts if found
+        if (postsWithImages.length > 0 && posts.length > 0 && postsWithImages[0].id !== posts[0].id) {
+          // Find new posts not in current list
+          const newPosts = postsWithImages.filter(p => !posts.some(q => q.id === p.id));
+          if (newPosts.length > 0) {
+            setPosts(prev => [...newPosts, ...prev]);
+          }
+        } else if (postsWithImages.length > 0 && posts.length === 0) {
+          setPosts(postsWithImages);
+        }
+      } catch {
+        // Ignore background errors
+      }
+    })();
+  }, [session]);
 
   const handleLogout = async () => {
     setLoadingSession(true);

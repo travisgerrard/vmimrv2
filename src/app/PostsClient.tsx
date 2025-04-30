@@ -38,18 +38,7 @@ type Props = {
 export default function PostsClient({ initialPosts }: Props) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
-  const [posts, setPosts] = useState<Post[]>(() => {
-    // Try to load cached posts from sessionStorage
-    const cached = sessionStorage.getItem('postsCache');
-    if (cached) {
-      try {
-        return JSON.parse(cached) as Post[];
-      } catch {
-        return initialPosts;
-      }
-    }
-    return initialPosts;
-  });
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [showOnlyStarred, setShowOnlyStarred] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingSession, setLoadingSession] = useState(true);
@@ -197,10 +186,19 @@ export default function PostsClient({ initialPosts }: Props) {
     return () => clearTimeout(id);
   }, [posts]);
 
-  // Save posts to cache whenever they change
+  // Hydrate posts from sessionStorage cache on mount (client only)
   useEffect(() => {
-    sessionStorage.setItem('postsCache', JSON.stringify(posts));
-  }, [posts]);
+    if (typeof window !== 'undefined') {
+      const cached = sessionStorage.getItem('postsCache');
+      if (cached) {
+        try {
+          setPosts(JSON.parse(cached) as Post[]);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, []);
 
   // Background refresh: fetch new posts and prepend if found
   useEffect(() => {

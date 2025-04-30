@@ -399,7 +399,14 @@ export default function PostDetailPage() {
   return (
     <div className="container mx-auto p-6 md:p-10 max-w-4xl font-sans">
        <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
-            <Link href="/" legacyBehavior><a className="text-blue-600 hover:underline">&larr; Back to Posts</a></Link>
+            <Link href="/" legacyBehavior>
+              <a
+                className="text-blue-600 hover:underline"
+                onClick={() => sessionStorage.setItem('postsScroll', window.scrollY.toString())}
+              >
+                &larr; Back to Posts
+              </a>
+            </Link>
             <div className="flex items-center flex-wrap gap-2"> {/* Added flex-wrap */}
                 <button
                     onClick={toggleStar}

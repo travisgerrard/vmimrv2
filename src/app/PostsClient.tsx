@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
@@ -45,7 +45,8 @@ export default function PostsClient({ initialPosts }: Props) {
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signedThumbnailUrls, setSignedThumbnailUrls] = useState<Record<string, string | null>>({});
-  const [postsRendered, setPostsRendered] = useState(false);
+  const postsContainerRef = useRef<HTMLDivElement | null>(null);
+  const [scrollRestored, setScrollRestored] = useState(false);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -168,24 +169,6 @@ export default function PostsClient({ initialPosts }: Props) {
     fetchAllSignedUrls();
   }, [posts]);
 
-  // Restore scroll position after posts are rendered
-  useEffect(() => {
-    if (postsRendered) {
-      const saved = sessionStorage.getItem('postsScroll');
-      if (saved) {
-        window.scrollTo(0, parseInt(saved, 10));
-        sessionStorage.removeItem('postsScroll');
-      }
-    }
-  }, [postsRendered]);
-
-  // Mark posts as rendered after DOM update
-  useEffect(() => {
-    setPostsRendered(false);
-    const id = setTimeout(() => setPostsRendered(true), 0);
-    return () => clearTimeout(id);
-  }, [posts]);
-
   // Hydrate posts from sessionStorage cache on mount (client only)
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -199,6 +182,18 @@ export default function PostsClient({ initialPosts }: Props) {
       }
     }
   }, []);
+
+  // Restore scroll position after posts are rendered in the DOM
+  useLayoutEffect(() => {
+    if (!scrollRestored && posts.length > 0 && postsContainerRef.current) {
+      const saved = sessionStorage.getItem('postsScroll');
+      if (saved) {
+        window.scrollTo(0, parseInt(saved, 10));
+        sessionStorage.removeItem('postsScroll');
+        setScrollRestored(true);
+      }
+    }
+  }, [posts, scrollRestored]);
 
   // Background refresh: fetch new posts and prepend if found
   useEffect(() => {
@@ -314,7 +309,7 @@ export default function PostsClient({ initialPosts }: Props) {
     }
     if (filteredPosts.length > 0) {
       return (
-        <div className="space-y-4">
+        <div ref={postsContainerRef} className="space-y-4">
           {filteredPosts.map((post) => (
             <a
               key={post.id}

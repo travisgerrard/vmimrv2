@@ -10,6 +10,7 @@ import { ThemeSupa } from "@supabase/auth-ui-shared";
 import Image from "next/image";
 import remarkGfm from 'remark-gfm';
 import { useRouter } from "next/navigation";
+import { format, subDays } from 'date-fns';
 
 // Define Post type
 export type Post = {
@@ -20,6 +21,13 @@ export type Post = {
   is_starred: boolean;
   imagePaths?: string[];
   hasPdf?: boolean;
+};
+
+type QuizQuestion = {
+  noteId: string;
+  question: string;
+  choices: string[];
+  correct: string;
 };
 
 function useDebounce(value: string, delay: number): string {
@@ -46,6 +54,17 @@ export default function PostsClient({ initialPosts }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [signedThumbnailUrls, setSignedThumbnailUrls] = useState<Record<string, string | null>>({});
   const postsContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Quiz state
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null);
+  const [quizError, setQuizError] = useState<string | null>(null);
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
+  const [quizRange, setQuizRange] = useState<{from: string, to: string}>(() => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const weekAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+    return { from: weekAgo, to: today };
+  });
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -267,6 +286,42 @@ export default function PostsClient({ initialPosts }: Props) {
     router.push(`/posts/${postId}`);
   };
 
+  // Fetch notes in range and generate quiz
+  async function handleGenerateQuiz() {
+    setQuizLoading(true);
+    setQuizError(null);
+    setQuizQuestions(null);
+    setQuizAnswers({});
+    try {
+      // Fetch notes in range from Supabase
+      const { data: notes, error } = await supabase
+        .from('posts')
+        .select('id, content, created_at')
+        .gte('created_at', quizRange.from)
+        .lte('created_at', quizRange.to)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      if (!notes || notes.length === 0) {
+        setQuizError('No notes found in selected range.');
+        setQuizLoading(false);
+        return;
+      }
+      // Call API
+      const res = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to generate quiz');
+      setQuizQuestions(json.questions);
+    } catch (e: unknown) {
+      setQuizError(e instanceof Error ? e.message : 'Failed to generate quiz');
+    } finally {
+      setQuizLoading(false);
+    }
+  }
+
   const renderPostsList = () => {
     let visiblePosts = posts;
     if (showOnlyStarred) {
@@ -425,6 +480,66 @@ export default function PostsClient({ initialPosts }: Props) {
           className="block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 placeholder-gray-500"
         />
       </div>
+      {/* Quiz Controls */}
+      <div className="mb-6 flex flex-wrap items-end gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">From</label>
+          <input type="date" value={quizRange.from} onChange={e => setQuizRange(r => ({ ...r, from: e.target.value }))} className="border rounded px-2 py-1" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">To</label>
+          <input type="date" value={quizRange.to} onChange={e => setQuizRange(r => ({ ...r, to: e.target.value }))} className="border rounded px-2 py-1" />
+        </div>
+        <button
+          onClick={handleGenerateQuiz}
+          className="px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors shadow-sm"
+          disabled={quizLoading}
+        >
+          {quizLoading ? 'Generating Quiz...' : 'Generate Quiz'}
+        </button>
+      </div>
+      {/* Quiz UI */}
+      {quizQuestions && (
+        <div className="mb-8 p-4 border rounded bg-white shadow">
+          <h2 className="text-lg font-bold mb-4">Quiz</h2>
+          {quizQuestions.map((q, idx) => (
+            <div key={idx} className="mb-6">
+              <div className="font-medium mb-2">{idx + 1}. {q.question}</div>
+              <div className="space-y-1">
+                {q.choices.map((choice: string, cidx: number) => (
+                  <label key={cidx} className="block">
+                    <input
+                      type="radio"
+                      name={`q${idx}`}
+                      value={choice}
+                      checked={quizAnswers[idx] === choice}
+                      onChange={() => setQuizAnswers(a => ({ ...a, [idx]: choice }))}
+                      className="mr-2"
+                    />
+                    {choice}
+                  </label>
+                ))}
+              </div>
+              {quizAnswers[idx] && (
+                <div className={quizAnswers[idx] === q.correct ? 'text-green-600 mt-2' : 'text-red-600 mt-2'}>
+                  {quizAnswers[idx] === q.correct ? 'Correct!' : `Incorrect. Correct answer: ${q.correct}`}
+                </div>
+              )}
+              <div className="mt-2">
+                <a
+                  href={`/posts/${q.noteId}`}
+                  className="text-blue-600 hover:underline text-xs"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View Source Note
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {quizError && <div className="text-red-600 mb-4">{quizError}</div>}
       {renderPostsList()}
     </main>
   );

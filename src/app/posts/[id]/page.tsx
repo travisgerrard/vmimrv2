@@ -402,7 +402,7 @@ export default function PostDetailPage() {
             <Link href="/" legacyBehavior>
               <a
                 className="text-blue-600 hover:underline"
-                onClick={() => sessionStorage.setItem('postsScroll', window.scrollY.toString())}
+                onPointerDown={() => sessionStorage.setItem('postsScroll', window.scrollY.toString())}
               >
                 &larr; Back to Posts
               </a>

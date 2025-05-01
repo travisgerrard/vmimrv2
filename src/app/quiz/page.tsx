@@ -1,0 +1,154 @@
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import Link from 'next/link';
+import { format, subDays } from 'date-fns';
+
+export default function QuizPage() {
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [quizRange, setQuizRange] = useState<{from: string, to: string}>(() => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const weekAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+    return { from: weekAgo, to: today };
+  });
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+
+  // Fetch quizzes on mount
+  useEffect(() => {
+    async function fetchQuizzes() {
+      setLoading(true);
+      setError(null);
+      const { data, error } = await supabase
+        .from('quizzes')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) setError(error.message);
+      else setQuizzes(data || []);
+      setLoading(false);
+    }
+    fetchQuizzes();
+  }, []);
+
+  // Generate new quiz
+  async function handleGenerateQuiz() {
+    setGenerating(true);
+    setGenError(null);
+    try {
+      // Fetch notes in range
+      const { data: notes, error } = await supabase
+        .from('posts')
+        .select('id, content, created_at')
+        .gte('created_at', quizRange.from)
+        .lte('created_at', quizRange.to)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      if (!notes || notes.length === 0) {
+        setGenError('No notes found in selected range.');
+        setGenerating(false);
+        return;
+      }
+      // Call API to generate quiz
+      const res = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to generate quiz');
+      // Save quiz to Supabase
+      const { data: quiz, error: saveError } = await supabase
+        .from('quizzes')
+        .insert({
+          user_id: (await supabase.auth.getUser()).data.user?.id,
+          questions: json.questions,
+          range_from: quizRange.from,
+          range_to: quizRange.to,
+        })
+        .select('*')
+        .single();
+      if (saveError) throw saveError;
+      // Prepend new quiz to list
+      setQuizzes(qs => [quiz, ...qs]);
+    } catch (e: any) {
+      setGenError(e.message || 'Failed to generate quiz');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  const mostRecentQuiz = quizzes[0];
+  const oldQuizzes = quizzes.slice(1);
+
+  return (
+    <main className="container mx-auto p-4 md:p-8 font-sans">
+      <h1 className="text-3xl font-bold mb-6 text-gray-900">Quiz Dashboard</h1>
+      {/* Quiz Generation Controls */}
+      <div className="mb-6 flex flex-wrap items-end gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">From</label>
+          <input type="date" value={quizRange.from} onChange={e => setQuizRange(r => ({ ...r, from: e.target.value }))} className="border rounded px-2 py-1" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">To</label>
+          <input type="date" value={quizRange.to} onChange={e => setQuizRange(r => ({ ...r, to: e.target.value }))} className="border rounded px-2 py-1" />
+        </div>
+        <button
+          onClick={handleGenerateQuiz}
+          className="px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors shadow-sm"
+          disabled={generating}
+        >
+          {generating ? 'Generating Quiz...' : 'Generate Quiz'}
+        </button>
+      </div>
+      {genError && <div className="text-red-600 mb-4">{genError}</div>}
+      {/* Most Recent Quiz */}
+      {mostRecentQuiz && (
+        <div className="mb-8 p-4 border rounded bg-white shadow">
+          <h2 className="text-lg font-bold mb-4">Most Recent Quiz</h2>
+          <QuizDisplay quiz={mostRecentQuiz} />
+          <div className="mt-2">
+            <Link href={`/quiz/${mostRecentQuiz.id}`} className="text-blue-600 hover:underline text-xs">Share / View Full Quiz</Link>
+          </div>
+        </div>
+      )}
+      {/* Quiz History */}
+      <h3 className="text-md font-semibold mb-2">Quiz History</h3>
+      <ul className="space-y-2">
+        {oldQuizzes.map(q => (
+          <li key={q.id}>
+            <Link href={`/quiz/${q.id}`} className="text-blue-600 hover:underline">
+              Quiz from {q.range_from} to {q.range_to} ({q.questions.length} questions)
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {loading && <div className="text-gray-500 mt-4">Loading quizzes...</div>}
+      {error && <div className="text-red-600 mt-4">{error}</div>}
+    </main>
+  );
+}
+
+// QuizDisplay component (scaffold)
+function QuizDisplay({ quiz }: { quiz: any }) {
+  if (!quiz.questions) return null;
+  return (
+    <div>
+      {quiz.questions.map((q: any, idx: number) => (
+        <div key={idx} className="mb-6">
+          <div className="font-medium mb-2">{idx + 1}. {q.question}</div>
+          <ul className="list-disc ml-6">
+            {q.choices.map((choice: string, cidx: number) => (
+              <li key={cidx}>{choice}</li>
+            ))}
+          </ul>
+          <div className="text-xs text-gray-500 mt-1">Correct: {q.correct}</div>
+          <div className="mt-1">
+            <Link href={`/posts/${q.noteId}`} className="text-blue-600 hover:underline text-xs">View Source Note</Link>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+} 

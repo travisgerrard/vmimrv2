@@ -68,8 +68,15 @@ ${notesForPrompt}`;
     // Log the raw response for debugging
     console.log('OpenAI raw response:', text);
     text = text.replace(/```json|```/g, '').trim();
-    const match = text.match(/\[([\s\S]*?)\]/);
-    quizJson = match ? JSON.parse('[' + match[1] + ']') : JSON.parse(text);
+    // Try to parse the whole string as JSON first
+    try {
+      quizJson = JSON.parse(text);
+    } catch {
+      // Fallback: try to extract the first JSON array
+      const match = text.match(/\[([\s\S]*?)\]/);
+      quizJson = match ? JSON.parse('[' + match[1] + ']') : null;
+    }
+    if (!quizJson) throw new Error('No valid JSON array found');
   } catch (e) {
     return NextResponse.json({ error: 'Failed to parse OpenAI response', details: e, raw: data.choices?.[0]?.message?.content }, { status: 500 });
   }

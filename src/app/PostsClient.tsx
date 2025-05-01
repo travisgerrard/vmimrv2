@@ -403,6 +403,11 @@ export default function PostsClient({ initialPosts }: Props) {
           >
             {showOnlyStarred ? "★ Show All" : "☆ Show Starred"}
           </button>
+          <Link href="/quiz" legacyBehavior>
+            <a className="inline-flex items-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              Quiz
+            </a>
+          </Link>
           <Link href="/posts/new" legacyBehavior>
             <a className="inline-flex items-center px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               + New Post

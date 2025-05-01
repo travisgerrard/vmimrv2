@@ -29,6 +29,7 @@ export default function QuizPage() {
   });
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [numQuestions, setNumQuestions] = useState(8);
 
   // Fetch quizzes on mount
   useEffect(() => {
@@ -68,7 +69,7 @@ export default function QuizPage() {
       const res = await fetch('/api/generate-quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes }),
+        body: JSON.stringify({ notes, numQuestions }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to generate quiz');
@@ -114,6 +115,17 @@ export default function QuizPage() {
         <div>
           <label className="block text-sm font-medium text-gray-700">To</label>
           <input type="date" value={quizRange.to} onChange={e => setQuizRange(r => ({ ...r, to: e.target.value }))} className="border rounded px-2 py-1" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Number of Questions</label>
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={numQuestions}
+            onChange={e => setNumQuestions(Number(e.target.value))}
+            className="border rounded px-2 py-1 w-24"
+          />
         </div>
         <button
           onClick={handleGenerateQuiz}

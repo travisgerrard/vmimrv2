@@ -16,7 +16,12 @@ type Quiz = {
   range_to: string;
 };
 
-export default async function QuizDetailPage({ params }: { params: { id: string } }) {
+type QuizDetailPageProps = {
+  params: { id: string };
+  searchParams?: { [key: string]: string | string[] | undefined };
+};
+
+export default async function QuizDetailPage({ params }: QuizDetailPageProps) {
   const { data: quiz, error } = await supabase
     .from('quizzes')
     .select('*')

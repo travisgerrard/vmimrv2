@@ -240,7 +240,10 @@ export default function PostsClient({ initialPosts }: Props) {
           // Find new posts not in current list
           const newPosts = postsWithImages.filter(p => !posts.some(q => q.id === p.id));
           if (newPosts.length > 0) {
-            setPosts(prev => [...newPosts, ...prev]);
+            // Merge and deduplicate by id
+            const merged = [...newPosts, ...posts];
+            const deduped = Array.from(new Map(merged.map(p => [p.id, p])).values());
+            setPosts(deduped);
           }
         } else if (postsWithImages.length > 0 && posts.length === 0) {
           setPosts(postsWithImages);

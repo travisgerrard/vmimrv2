@@ -65,9 +65,9 @@ ${notesForPrompt}`;
   let quizJson = null;
   try {
     let text = data.choices?.[0]?.message?.content || '';
-    // Remove code block markers if present
+    // Log the raw response for debugging
+    console.log('OpenAI raw response:', text);
     text = text.replace(/```json|```/g, '').trim();
-    // Try to extract the first JSON array
     const match = text.match(/\[([\s\S]*?)\]/);
     quizJson = match ? JSON.parse('[' + match[1] + ']') : JSON.parse(text);
   } catch (e) {

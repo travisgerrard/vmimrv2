@@ -2,9 +2,7 @@ import { notFound } from 'next/navigation';
 // import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import ShareQuizButtonWrapper from './ShareQuizButtonWrapper';
-import dynamic from 'next/dynamic';
-
-const ClientQuizDisplay = dynamic(() => import('./ClientQuizDisplay'), { ssr: false });
+import QuizDetailClient from './QuizDetailClient';
 
 // Removed unused QuizQuestion type
 
@@ -32,7 +30,7 @@ export default async function QuizDetailPage({ params }: { params: Promise<{ qui
         Date range: {quiz.range_from} to {quiz.range_to}
       </div>
       <ShareQuizButtonWrapper />
-      <ClientQuizDisplay quiz={quiz} />
+      <QuizDetailClient quiz={quiz} />
     </main>
   );
 } 

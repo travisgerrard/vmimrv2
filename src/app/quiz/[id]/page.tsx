@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
-import ShareQuizButton from './ShareQuizButton';
+import dynamic from 'next/dynamic';
+const ShareQuizButton = dynamic(() => import('./ShareQuizButton'), { ssr: false });
 
 type QuizQuestion = {
   question: string;

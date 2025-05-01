@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 
 export default async function QuizDetailPage({ params }: { params: { id: string } }) {
   const { data: quiz, error } = await supabase

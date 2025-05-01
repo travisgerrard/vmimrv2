@@ -1,5 +1,6 @@
+"use client";
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { format, subDays } from 'date-fns';
 

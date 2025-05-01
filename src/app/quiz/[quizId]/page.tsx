@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
-import ShareQuizButton from './ShareQuizButton';
+import ShareQuizButtonWrapper from './ShareQuizButtonWrapper';
 
 type QuizQuestion = {
   question: string;
@@ -32,7 +32,7 @@ export default async function QuizDetailPage({ params }: { params: { quizId: str
       <div className="mb-2 text-sm text-gray-500">
         Date range: {quiz.range_from} to {quiz.range_to}
       </div>
-      <ShareQuizButton />
+      <ShareQuizButtonWrapper />
       <QuizDisplay quiz={quiz} />
     </main>
   );

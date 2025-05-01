@@ -4,8 +4,22 @@ import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { format, subDays } from 'date-fns';
 
+type QuizQuestion = {
+  question: string;
+  choices: string[];
+  correct: string;
+  noteId: string;
+};
+
+type Quiz = {
+  id: string;
+  questions: QuizQuestion[];
+  range_from: string;
+  range_to: string;
+};
+
 export default function QuizPage() {
-  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quizRange, setQuizRange] = useState<{from: string, to: string}>(() => {
@@ -26,7 +40,7 @@ export default function QuizPage() {
         .select('*')
         .order('created_at', { ascending: false });
       if (error) setError(error.message);
-      else setQuizzes(data || []);
+      else setQuizzes((data as Quiz[]) || []);
       setLoading(false);
     }
     fetchQuizzes();
@@ -72,8 +86,9 @@ export default function QuizPage() {
       if (saveError) throw saveError;
       // Prepend new quiz to list
       setQuizzes(qs => [quiz, ...qs]);
-    } catch (e: any) {
-      setGenError(e.message || 'Failed to generate quiz');
+    } catch (e: unknown) {
+      if (e instanceof Error) setGenError(e.message || 'Failed to generate quiz');
+      else setGenError('Failed to generate quiz');
     } finally {
       setGenerating(false);
     }
@@ -132,11 +147,11 @@ export default function QuizPage() {
 }
 
 // QuizDisplay component (scaffold)
-function QuizDisplay({ quiz }: { quiz: any }) {
+function QuizDisplay({ quiz }: { quiz: Quiz }) {
   if (!quiz.questions) return null;
   return (
     <div>
-      {quiz.questions.map((q: any, idx: number) => (
+      {quiz.questions.map((q: QuizQuestion, idx: number) => (
         <div key={idx} className="mb-6">
           <div className="font-medium mb-2">{idx + 1}. {q.question}</div>
           <ul className="list-disc ml-6">

@@ -2,6 +2,20 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 
+type QuizQuestion = {
+  question: string;
+  choices: string[];
+  correct: string;
+  noteId: string;
+};
+
+type Quiz = {
+  id: string;
+  questions: QuizQuestion[];
+  range_from: string;
+  range_to: string;
+};
+
 export default async function QuizDetailPage({ params }: { params: { id: string } }) {
   const { data: quiz, error } = await supabase
     .from('quizzes')
@@ -28,11 +42,11 @@ export default async function QuizDetailPage({ params }: { params: { id: string 
   );
 }
 
-function QuizDisplay({ quiz }: { quiz: any }) {
+function QuizDisplay({ quiz }: { quiz: Quiz }) {
   if (!quiz.questions) return null;
   return (
     <div>
-      {quiz.questions.map((q: any, idx: number) => (
+      {quiz.questions.map((q: QuizQuestion, idx: number) => (
         <div key={idx} className="mb-6">
           <div className="font-medium mb-2">{idx + 1}. {q.question}</div>
           <ul className="list-disc ml-6">

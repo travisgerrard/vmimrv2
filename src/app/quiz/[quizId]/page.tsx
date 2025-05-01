@@ -17,7 +17,7 @@ type Quiz = {
   range_to: string;
 };
 
-export default async function QuizDetailPage({ params }: { params: { quizId: string } }) {
+export default async function QuizDetailPage({ params }) {
   const { data: quiz, error } = await supabase
     .from('quizzes')
     .select('*')

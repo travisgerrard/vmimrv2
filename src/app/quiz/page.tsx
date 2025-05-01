@@ -179,7 +179,7 @@ function QuizDisplay({ quiz }: { quiz: Quiz }) {
               </div>
             )}
             <div className="mt-1">
-              <Link href={`/posts/${q.noteId}`} className="text-blue-600 hover:underline text-xs">View Source Note</Link>
+              <Link href={`/posts/${q.noteId}`} className="text-blue-600 hover:underline text-xs" target="_blank" rel="noopener noreferrer">View Source Note</Link>
             </div>
           </div>
         );

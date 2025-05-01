@@ -99,7 +99,12 @@ export default function QuizPage() {
 
   return (
     <main className="container mx-auto p-4 md:p-8 font-sans">
-      <h1 className="text-3xl font-bold mb-6 text-gray-900">Quiz Dashboard</h1>
+      <div className="mb-6 flex items-center gap-4">
+        <Link href="/" className="inline-flex items-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          &larr; Back to Main Page
+        </Link>
+        <h1 className="text-3xl font-bold text-gray-900 mb-0">Quiz Dashboard</h1>
+      </div>
       {/* Quiz Generation Controls */}
       <div className="mb-6 flex flex-wrap items-end gap-4">
         <div>
@@ -186,4 +191,4 @@ function QuizDisplay({ quiz }: { quiz: Quiz }) {
       })}
     </div>
   );
-} 
+}

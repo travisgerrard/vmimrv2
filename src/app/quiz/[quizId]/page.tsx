@@ -17,11 +17,12 @@ type Quiz = {
   range_to: string;
 };
 
-export default async function QuizDetailPage({ params }: { params: { quizId: string } }) {
+export default async function QuizDetailPage({ params }: { params: Promise<{ quizId: string }> }) {
+  const { quizId } = await params;
   const { data: quiz, error } = await supabase
     .from('quizzes')
     .select('*')
-    .eq('id', params.quizId)
+    .eq('id', quizId)
     .single();
 
   if (error || !quiz) return notFound();

@@ -389,14 +389,14 @@ export default function PostsClient({ initialPosts }: Props) {
 
   return (
     <main className="container mx-auto p-4 md:p-8 font-sans">
-      <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">{session ? 'Your Posts' : 'All Posts'}</h1>
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-between items-stretch gap-2 sm:gap-4 mb-6 w-full">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2 sm:mb-4 w-full">{session ? 'Your Posts' : 'All Posts'}</h1>
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 w-full sm:w-auto">
           {session && (
             <>
               <button
                 onClick={() => setShowOnlyMine(!showOnlyMine)}
-                className={`px-4 py-2 rounded border border-gray-300 text-sm font-medium transition-colors disabled:opacity-50 ${
+                className={`w-full sm:w-auto px-4 py-2 rounded border border-gray-300 text-sm font-medium transition-colors disabled:opacity-50 ${
                   showOnlyMine
                     ? "bg-yellow-400 border-yellow-500 text-yellow-900 hover:bg-yellow-300"
                     : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"
@@ -405,18 +405,18 @@ export default function PostsClient({ initialPosts }: Props) {
                 {showOnlyMine ? "Show All Posts" : "Show Only My Posts"}
               </button>
               <Link href="/quiz" legacyBehavior>
-                <a className="inline-flex items-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <a className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                   Quiz
                 </a>
               </Link>
               <Link href="/posts/new" legacyBehavior>
-                <a className="inline-flex items-center px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <a className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                   + New Post
                 </a>
               </Link>
               <button
                 onClick={handleLogout}
-                className="inline-flex items-center px-4 py-2 rounded border border-red-600 bg-red-500 text-white hover:bg-red-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 rounded border border-red-600 bg-red-500 text-white hover:bg-red-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
               >
                 Logout {session?.user?.email ? `(${session.user.email.split("@")[0]})` : ""}
               </button>
@@ -425,7 +425,7 @@ export default function PostsClient({ initialPosts }: Props) {
           {!session && (
             <button
               onClick={() => supabase.auth.signInWithOtp({ email: prompt('Enter your email to login:') || '' })}
-              className="inline-flex items-center px-4 py-2 rounded border border-blue-600 bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 rounded border border-blue-600 bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Login
             </button>

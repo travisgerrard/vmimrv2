@@ -11,6 +11,7 @@ type Post = {
   is_starred: boolean;
   imagePaths?: string[];
   hasPdf?: boolean;
+  user_id: string;
 };
 
 export default async function Home() {
@@ -21,7 +22,7 @@ export default async function Home() {
     // Fetch all posts (optionally limit for demo)
     const { data: postsData, error: postsError } = await supabase
       .from('posts')
-      .select('id, created_at, content, tags, is_starred');
+      .select('id, created_at, content, tags, is_starred, user_id');
     if (postsError) throw postsError;
     posts = postsData || [];
 
@@ -60,5 +61,5 @@ export default async function Home() {
   }
 
   // Pass posts to the client component
-  return <PostsClient initialPosts={posts} />;
+  return <PostsClient initialPosts={posts.map(post => ({ ...post, user_id: post.user_id || '' }))} />;
 }

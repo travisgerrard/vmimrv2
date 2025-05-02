@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
 import type { Session } from '@supabase/supabase-js'; // Import Session type
 import Image from 'next/image';
+import { Fragment } from 'react';
 
 // Define MediaFile type
 type MediaFile = {
@@ -27,9 +28,15 @@ type Post = {
   content: string;
   tags: string[] | null;
   is_starred: boolean;
+  user_id: string;
   secret_url?: string | null; // Add secret_url
   summary?: string | null;
   media_files?: MediaFile[];
+};
+
+type PatientSummary = {
+  id: string;
+  summary: string;
 };
 
 export default function PostDetailPage() {
@@ -46,58 +53,51 @@ export default function PostDetailPage() {
   const [signedImageUrls, setSignedImageUrls] = useState<Record<string, string | null>>({});
   const [isSummarizationPending, setIsSummarizationPending] = useState(false); // Track summary status
   const [revokingLink, setRevokingLink] = useState(false); // State for revoke loading
+  const [patientSummary, setPatientSummary] = useState<PatientSummary | null>(null);
+  const [patientSummaryLoading, setPatientSummaryLoading] = useState(false);
+  const [patientSummaryError, setPatientSummaryError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState('');
   const params = useParams();
   const router = useRouter();
   const postId = params?.id as string;
 
   useEffect(() => {
     const checkSessionAndFetch = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError) throw sessionError;
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        setSession(currentSession); // Set session if found, but do not redirect if not
 
-            if (!currentSession) {
-                router.push('/auth');
-                return;
-            }
-            // Set session state if found
-            setSession(currentSession);
-
-            if (!postId) {
-                setError("Post ID is missing.");
-                setLoading(false);
-                return;
-            }
-
-            await Promise.all([
-                fetchPost(postId),
-                fetchMediaFiles(postId)
-            ]);
-
-        } catch (err: unknown) {
-            console.error("Error during initial load:", err);
-            const message = err instanceof Error ? err.message : 'An unknown error occurred during setup.';
-            setError(`Failed to load page: ${message}`);
-        } finally {
-            setLoading(false);
+        if (!postId) {
+          setError("Post ID is missing.");
+          setLoading(false);
+          return;
         }
+
+        await Promise.all([
+          fetchPost(postId),
+          fetchMediaFiles(postId)
+        ]);
+
+      } catch (err: unknown) {
+        console.error("Error during initial load:", err);
+        const message = err instanceof Error ? err.message : 'An unknown error occurred during setup.';
+        setError(`Failed to load page: ${message}`);
+      } finally {
+        setLoading(false);
+      }
     };
 
     checkSessionAndFetch();
 
-     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (!session) {
-          router.push('/auth');
-        }
-        // Update session state on auth change
-        setSession(session);
-      });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
 
-      return () => subscription?.unsubscribe();
-
-  }, [postId, router]); // Dependencies remain the same
+    return () => subscription?.unsubscribe();
+  }, [postId, router]);
 
   const fetchPost = async (id: string) => {
     try {
@@ -371,6 +371,57 @@ export default function PostDetailPage() {
        };
    }, [postId, post, mediaFiles]); // Add post and mediaFiles to dependencies for initial check
 
+  // Fetch patient summary if it exists on mount
+  useEffect(() => {
+    const fetchPatientSummary = async () => {
+      if (!post) return;
+      setPatientSummaryLoading(true);
+      setPatientSummaryError(null);
+      try {
+        const res = await fetch('/api/patient-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ post_id: post.id, feedback: '' }),
+        });
+        const data = await res.json();
+        if (res.ok && data.summary) {
+          setPatientSummary({ id: data.id, summary: data.summary });
+        } else {
+          setPatientSummary(null);
+        }
+      } catch {
+        setPatientSummaryError('Could not fetch patient summary.');
+      } finally {
+        setPatientSummaryLoading(false);
+      }
+    };
+    fetchPatientSummary();
+  }, [post]);
+
+  const handleGeneratePatientSummary = async (customFeedback?: string) => {
+    if (!post) return;
+    setPatientSummaryLoading(true);
+    setPatientSummaryError(null);
+    try {
+      const res = await fetch('/api/patient-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: post.id, feedback: customFeedback || '' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.summary) {
+        setPatientSummary({ id: data.id, summary: data.summary });
+        setFeedback('');
+      } else {
+        setPatientSummaryError(data.error || 'Failed to generate patient summary.');
+      }
+    } catch {
+      setPatientSummaryError('Failed to generate patient summary.');
+    } finally {
+      setPatientSummaryLoading(false);
+    }
+  };
+
    if (loading) {
      return <div className="p-8 text-center">Loading post details...</div>;
    }
@@ -408,30 +459,34 @@ export default function PostDetailPage() {
               </a>
             </Link>
             <div className="flex items-center flex-wrap gap-2"> {/* Added flex-wrap */}
-                <button
-                    onClick={toggleStar}
-                    disabled={togglingStar}
-                    className={`px-4 py-2 rounded border border-gray-300 text-sm font-medium transition-colors disabled:opacity-50 ${isStarred ? 'bg-yellow-400 border-yellow-500 text-yellow-900 hover:bg-yellow-300' : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'}`}
-                >
-                    {togglingStar ? '...' : (isStarred ? '★ Unstar' : '☆ Star')}
-                </button>
-                 <button
-                    onClick={generateShareLink}
-                    disabled={generatingLink || !!secretUrl}
-                    className="px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors disabled:opacity-50 disabled:bg-blue-300 disabled:border-blue-400"
-                >
-                    {generatingLink ? 'Generating...' : (secretUrl ? 'Link Generated' : 'Generate Share Link')}
-                </button>
-                 <button
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="px-4 py-2 rounded border border-red-600 bg-red-500 text-white hover:bg-red-600 text-sm font-medium transition-colors disabled:opacity-50 disabled:bg-red-300 disabled:border-red-400"
-                 >
-                    {deleting ? 'Deleting...' : 'Delete Post'}
-                 </button>
-                 <Link href={`/posts/${post.id}/edit`} legacyBehavior>
-                    <a className="px-4 py-2 rounded border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors">Edit</a>
-                 </Link>
+                {session && session.user.id === post.user_id && (
+                    <>
+                        <button
+                            onClick={toggleStar}
+                            disabled={togglingStar}
+                            className={`px-4 py-2 rounded border border-gray-300 text-sm font-medium transition-colors disabled:opacity-50 ${isStarred ? 'bg-yellow-400 border-yellow-500 text-yellow-900 hover:bg-yellow-300' : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'}`}
+                        >
+                            {togglingStar ? '...' : (isStarred ? '★ Unstar' : '☆ Star')}
+                        </button>
+                         <button
+                            onClick={generateShareLink}
+                            disabled={generatingLink || !!secretUrl}
+                            className="px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors disabled:opacity-50 disabled:bg-blue-300 disabled:border-blue-400"
+                        >
+                            {generatingLink ? 'Generating...' : (secretUrl ? 'Link Generated' : 'Generate Share Link')}
+                        </button>
+                         <button
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            className="px-4 py-2 rounded border border-red-600 bg-red-500 text-white hover:bg-red-600 text-sm font-medium transition-colors disabled:opacity-50 disabled:bg-red-300 disabled:border-red-400"
+                         >
+                            {deleting ? 'Deleting...' : 'Delete Post'}
+                         </button>
+                         <Link href={`/posts/${post.id}/edit`} legacyBehavior>
+                            <a className="px-4 py-2 rounded border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors">Edit</a>
+                         </Link>
+                    </>
+                )}
             </div>
        </div>
 
@@ -447,14 +502,16 @@ export default function PostDetailPage() {
                     >
                         Copy
                     </button>
-                    <button
-                        onClick={revokeShareLink}
-                        disabled={revokingLink}
-                        className="px-2 py-1 rounded border border-red-300 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-medium disabled:opacity-50"
-                        title="Revoke this share link"
-                    >
-                        {revokingLink ? 'Revoking...' : 'Revoke'}
-                    </button>
+                    {session && session.user.id === post.user_id && (
+                        <button
+                            onClick={revokeShareLink}
+                            disabled={revokingLink}
+                            className="px-2 py-1 rounded border border-red-300 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-medium disabled:opacity-50"
+                            title="Revoke this share link"
+                        >
+                            {revokingLink ? 'Revoking...' : 'Revoke'}
+                        </button>
+                    )}
                 </div>
             </div>
         )}
@@ -539,6 +596,39 @@ export default function PostDetailPage() {
         </div>
       )}
 
+      {/* --- Patient Summary Section --- */}
+      <div className="mb-6">
+        <h3 className="font-semibold text-green-700 mb-2">Patient-Friendly Summary</h3>
+        {patientSummaryLoading && (
+          <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded text-sm text-green-700">Generating summary...</div>
+        )}
+        {patientSummaryError && (
+          <div className="p-4 border-l-4 border-red-300 bg-red-50 rounded text-sm text-red-700">{patientSummaryError}</div>
+        )}
+        {patientSummary && !patientSummaryLoading && !patientSummaryError && (
+          <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded mb-2">
+            <div className="text-sm text-gray-800 whitespace-pre-line">{patientSummary.summary}</div>
+          </div>
+        )}
+        <div className="flex flex-col gap-2 mt-2">
+          <textarea
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            placeholder="Optional: Give feedback or instructions to improve the summary (e.g., 'simplify more', 'focus on diet advice')"
+            value={feedback}
+            onChange={e => setFeedback(e.target.value)}
+            rows={2}
+            disabled={patientSummaryLoading}
+          />
+          <button
+            className="px-4 py-2 rounded border border-green-600 bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors disabled:opacity-50"
+            onClick={() => handleGeneratePatientSummary(feedback)}
+            disabled={patientSummaryLoading}
+          >
+            {patientSummary ? 'Regenerate with Feedback' : 'Generate Patient Summary'}
+          </button>
+        </div>
+      </div>
+      {/* --- End Patient Summary Section --- */}
       <div className="mt-8 text-sm text-gray-500 border-t border-gray-200 pt-4">
         <p>Created: {new Date(post.created_at).toLocaleString()}</p>
         <p>Last Updated: {new Date(post.updated_at).toLocaleString()}</p>

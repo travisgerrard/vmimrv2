@@ -62,6 +62,15 @@ export default function PostDetailPage() {
   const router = useRouter();
   const postId = params?.id as string;
 
+  // Debug logs for summary rendering (must be before any early returns)
+  useEffect(() => {
+    console.log('post:', post);
+    console.log('patientSummary:', patientSummary);
+    console.log('tags:', post?.tags);
+    console.log('patientSummaryLoading:', patientSummaryLoading);
+    console.log('patientSummaryError:', patientSummaryError);
+  }, [post, patientSummary, patientSummaryLoading, patientSummaryError]);
+
   useEffect(() => {
     const checkSessionAndFetch = async () => {
       setLoading(true);
@@ -450,15 +459,6 @@ export default function PostDetailPage() {
 
    const imageFiles = mediaFiles.filter(file => file.file_type?.startsWith('image/'));
    const otherFiles = mediaFiles.filter(file => !file.file_type?.startsWith('image/'));
-
-  // Debug logs for summary rendering
-  useEffect(() => {
-    console.log('post:', post);
-    console.log('patientSummary:', patientSummary);
-    console.log('tags:', post?.tags);
-    console.log('patientSummaryLoading:', patientSummaryLoading);
-    console.log('patientSummaryError:', patientSummaryError);
-  }, [post, patientSummary, patientSummaryLoading, patientSummaryError]);
 
   return (
     <div className="container mx-auto p-6 md:p-10 max-w-4xl font-sans">

@@ -18,6 +18,12 @@ type Quiz = {
   range_to: string;
 };
 
+type Post = {
+  id: string;
+  content: string;
+  created_at: string;
+};
+
 export default function QuizPage() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +36,9 @@ export default function QuizPage() {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [numQuestions, setNumQuestions] = useState(8);
+  const [postList, setPostList] = useState<Post[]>([]);
+  const [selectedPostIds, setSelectedPostIds] = useState<string[]>([]);
+  const [postSearchTerm, setPostSearchTerm] = useState('');
 
   // Fetch quizzes on mount
   useEffect(() => {
@@ -47,21 +56,37 @@ export default function QuizPage() {
     fetchQuizzes();
   }, []);
 
+  useEffect(() => {
+    async function fetchPosts() {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('id, content, created_at')
+        .order('created_at', { ascending: false });
+      if (!error) setPostList(data || []);
+    }
+    fetchPosts();
+  }, []);
+
   // Generate new quiz
   async function handleGenerateQuiz() {
     setGenerating(true);
     setGenError(null);
     try {
-      // Fetch notes in range
-      const { data: notes, error } = await supabase
-        .from('posts')
-        .select('id, content, created_at')
-        .gte('created_at', quizRange.from)
-        .lte('created_at', quizRange.to)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      let notes;
+      if (selectedPostIds.length > 0) {
+        notes = postList.filter(p => selectedPostIds.includes(p.id));
+      } else {
+        // fallback to time frame
+        const { data } = await supabase
+          .from('posts')
+          .select('id, content, created_at')
+          .gte('created_at', quizRange.from)
+          .lte('created_at', quizRange.to)
+          .order('created_at', { ascending: false });
+        notes = data || [];
+      }
       if (!notes || notes.length === 0) {
-        setGenError('No notes found in selected range.');
+        setGenError('No posts selected or found in selected range.');
         setGenerating(false);
         return;
       }
@@ -107,6 +132,59 @@ export default function QuizPage() {
         <h1 className="text-3xl font-bold text-gray-900 mb-0">Quiz Dashboard</h1>
       </div>
       {/* Quiz Generation Controls */}
+      <div className="mb-6">
+        <h2 className="text-lg font-bold mb-2">Select Posts for Quiz</h2>
+        <input
+          type="search"
+          value={postSearchTerm}
+          onChange={e => setPostSearchTerm(e.target.value)}
+          placeholder="Search posts..."
+          className="border rounded px-2 py-1 mb-2 w-full"
+        />
+        <table className="min-w-full border">
+          <thead>
+            <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  checked={postList.length > 0 && postList.filter(p => p.content.toLowerCase().includes(postSearchTerm.toLowerCase())).every(p => selectedPostIds.includes(p.id))}
+                  onChange={e => {
+                    const visible = postList.filter(p => p.content.toLowerCase().includes(postSearchTerm.toLowerCase()));
+                    if (e.target.checked) setSelectedPostIds(ids => Array.from(new Set([...ids, ...visible.map(p => p.id)])));
+                    else setSelectedPostIds(ids => ids.filter(id => !visible.map(p => p.id).includes(id)));
+                  }}
+                />
+              </th>
+              <th>Content</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {postList
+              .filter(p => p.content.toLowerCase().includes(postSearchTerm.toLowerCase()))
+              .map(post => (
+                <tr key={post.id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedPostIds.includes(post.id)}
+                      onChange={() => {
+                        setSelectedPostIds(ids =>
+                          ids.includes(post.id)
+                            ? ids.filter(id => id !== post.id)
+                            : [...ids, post.id]
+                        );
+                      }}
+                    />
+                  </td>
+                  <td>{post.content.substring(0, 60)}...</td>
+                  <td>{new Date(post.created_at).toLocaleDateString()}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+        <div className="mt-2 text-sm text-gray-600">{selectedPostIds.length} post(s) selected</div>
+      </div>
       <div className="mb-6 flex flex-wrap items-end gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700">From</label>

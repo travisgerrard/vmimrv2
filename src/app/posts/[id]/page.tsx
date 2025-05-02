@@ -372,31 +372,33 @@ export default function PostDetailPage() {
        };
    }, [postId, post, mediaFiles]); // Add post and mediaFiles to dependencies for initial check
 
-  // Fetch patient summary if it exists on mount
+  // On mount, check if a summary exists (but do not generate)
   useEffect(() => {
-    const fetchPatientSummary = async () => {
+    const fetchExistingPatientSummary = async () => {
       if (!post) return;
       setPatientSummaryLoading(true);
       setPatientSummaryError(null);
       try {
-        const res = await fetch('/api/patient-summary', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ post_id: post.id, feedback: '' }),
-        });
-        const data = await res.json();
-        if (res.ok && data.summary) {
-          setPatientSummary({ id: data.id, summary: data.summary });
+        const { data, error } = await supabase
+          .from('patient_summaries')
+          .select('*')
+          .eq('post_id', post.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        if (data && data.summary_text) {
+          setPatientSummary({ id: data.id, summary: data.summary_text });
         } else {
           setPatientSummary(null);
         }
       } catch {
-        setPatientSummaryError('Could not fetch patient summary.');
+        setPatientSummaryError(null); // Don't show error on initial load
       } finally {
         setPatientSummaryLoading(false);
       }
     };
-    fetchPatientSummary();
+    fetchExistingPatientSummary();
   }, [post]);
 
   const handleGeneratePatientSummary = async (customFeedback?: string) => {
@@ -604,9 +606,6 @@ export default function PostDetailPage() {
         {patientSummaryLoading && (
           <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded text-sm text-green-700">Generating summary...</div>
         )}
-        {hasTriedGenerate && patientSummaryError && (
-          <div className="p-4 border-l-4 border-red-300 bg-red-50 rounded text-sm text-red-700">{patientSummaryError}</div>
-        )}
         {patientSummary && !patientSummaryLoading && !patientSummaryError && (
           <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded mb-2">
             <div className="text-sm text-gray-800 prose prose-sm max-w-none">
@@ -616,23 +615,37 @@ export default function PostDetailPage() {
             </div>
           </div>
         )}
-        <div className="flex flex-col gap-2 mt-2">
-          <textarea
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-            placeholder="Optional: Give feedback or instructions to improve the summary (e.g., 'simplify more', 'focus on diet advice')"
-            value={feedback}
-            onChange={e => setFeedback(e.target.value)}
-            rows={2}
-            disabled={patientSummaryLoading}
-          />
+        {!patientSummary && !patientSummaryLoading && (
           <button
-            className="px-4 py-2 rounded border border-green-600 bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors disabled:opacity-50"
-            onClick={() => handleGeneratePatientSummary(feedback)}
+            className="px-4 py-2 rounded border border-green-600 bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors disabled:opacity-50 w-full"
+            onClick={() => { setHasTriedGenerate(true); handleGeneratePatientSummary(''); }}
             disabled={patientSummaryLoading}
           >
-            {patientSummary ? 'Regenerate with Feedback' : 'Generate Patient Summary'}
+            Generate Patient-Friendly Summary
           </button>
-        </div>
+        )}
+        {hasTriedGenerate && !patientSummaryLoading && !patientSummary && (
+          <div className="flex flex-col gap-2 mt-2">
+            {patientSummaryError && (
+              <div className="p-4 border-l-4 border-red-300 bg-red-50 rounded text-sm text-red-700">{patientSummaryError}</div>
+            )}
+            <textarea
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              placeholder="Optional: Give feedback or instructions to improve the summary (e.g., 'simplify more', 'focus on diet advice')"
+              value={feedback}
+              onChange={e => setFeedback(e.target.value)}
+              rows={2}
+              disabled={patientSummaryLoading}
+            />
+            <button
+              className="px-4 py-2 rounded border border-green-600 bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors disabled:opacity-50"
+              onClick={() => handleGeneratePatientSummary(feedback)}
+              disabled={patientSummaryLoading}
+            >
+              Regenerate with Feedback
+            </button>
+          </div>
+        )}
       </div>
       {/* --- End Patient Summary Section --- */}
       <div className="mt-8 text-sm text-gray-500 border-t border-gray-200 pt-4">

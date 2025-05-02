@@ -5,8 +5,6 @@ import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
 import ReactMarkdown from "react-markdown";
-import { Auth } from "@supabase/auth-ui-react";
-import { ThemeSupa } from "@supabase/auth-ui-shared";
 import Image from "next/image";
 import remarkGfm from 'remark-gfm';
 import { useRouter } from "next/navigation";
@@ -372,56 +370,49 @@ export default function PostsClient({ initialPosts }: Props) {
     );
   }
 
-  if (!session) {
-    const isDarkMode = typeof window !== "undefined" && document.documentElement.classList.contains("dark");
-    return (
-      <main className="container mx-auto p-4 md:p-8 flex justify-center items-center min-h-[calc(100vh-10rem)]">
-        <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md">
-          <h1 className="text-2xl font-bold mb-6 text-center text-gray-900">Welcome</h1>
-          <Auth
-            supabaseClient={supabase}
-            appearance={{ theme: ThemeSupa }}
-            view="magic_link"
-            providers={[]}
-            showLinks={false}
-            theme={isDarkMode ? "dark" : "default"}
-          />
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="container mx-auto p-4 md:p-8 font-sans">
       <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Your Posts</h1>
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => setShowOnlyStarred(!showOnlyStarred)}
-            className={`px-4 py-2 rounded border border-gray-300 text-sm font-medium transition-colors disabled:opacity-50 ${
-              showOnlyStarred
-                ? "bg-yellow-400 border-yellow-500 text-yellow-900 hover:bg-yellow-300"
-                : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            {showOnlyStarred ? "★ Show All" : "☆ Show Starred"}
-          </button>
-          <Link href="/quiz" legacyBehavior>
-            <a className="inline-flex items-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-              Quiz
-            </a>
-          </Link>
-          <Link href="/posts/new" legacyBehavior>
-            <a className="inline-flex items-center px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-              + New Post
-            </a>
-          </Link>
-          <button
-            onClick={handleLogout}
-            className="inline-flex items-center px-4 py-2 rounded border border-red-600 bg-red-500 text-white hover:bg-red-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-          >
-            Logout {session?.user?.email ? `(${session.user.email.split("@")[0]})` : ""}
-          </button>
+          {session && (
+            <>
+              <button
+                onClick={() => setShowOnlyStarred(!showOnlyStarred)}
+                className={`px-4 py-2 rounded border border-gray-300 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  showOnlyStarred
+                    ? "bg-yellow-400 border-yellow-500 text-yellow-900 hover:bg-yellow-300"
+                    : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {showOnlyStarred ? "★ Show All" : "☆ Show Starred"}
+              </button>
+              <Link href="/quiz" legacyBehavior>
+                <a className="inline-flex items-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                  Quiz
+                </a>
+              </Link>
+              <Link href="/posts/new" legacyBehavior>
+                <a className="inline-flex items-center px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                  + New Post
+                </a>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center px-4 py-2 rounded border border-red-600 bg-red-500 text-white hover:bg-red-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Logout {session?.user?.email ? `(${session.user.email.split("@")[0]})` : ""}
+              </button>
+            </>
+          )}
+          {!session && (
+            <button
+              onClick={() => supabase.auth.signInWithOtp({ email: prompt('Enter your email to login:') || '' })}
+              className="inline-flex items-center px-4 py-2 rounded border border-blue-600 bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Login
+            </button>
+          )}
         </div>
       </div>
       <div className="mb-6">

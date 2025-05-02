@@ -85,9 +85,9 @@ export default function PostsClient({ initialPosts }: Props) {
         }
         const { data: postsData, error: fetchError } = await queryBuilder;
         if (fetchError) throw fetchError;
-        let postsWithImages: Post[] = (postsData || []).map((post: any) => ({
+        let postsWithImages: Post[] = (postsData || []).map((post) => ({
           ...post,
-          user_id: post.user_id || '',
+          user_id: (post as { user_id?: string }).user_id || '',
         }));
         if (postsWithImages.length > 0) {
           const postIds = postsWithImages.map((p) => p.id);
@@ -208,9 +208,9 @@ export default function PostsClient({ initialPosts }: Props) {
           .order("created_at", { ascending: false });
         const { data: postsData, error: fetchError } = await queryBuilder;
         if (fetchError) throw fetchError;
-        let postsWithImages: Post[] = (postsData || []).map((post: any) => ({
+        let postsWithImages: Post[] = (postsData || []).map((post) => ({
           ...post,
-          user_id: post.user_id || '',
+          user_id: (post as { user_id?: string }).user_id || '',
         }));
         if (postsWithImages.length > 0) {
           const postIds = postsWithImages.map((p) => p.id);

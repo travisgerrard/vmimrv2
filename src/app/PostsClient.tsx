@@ -37,7 +37,7 @@ export default function PostsClient({ initialPosts }: Props) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
-  const [showOnlyStarred, setShowOnlyStarred] = useState(false);
+  const [showOnlyMine, setShowOnlyMine] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingSession, setLoadingSession] = useState(true);
   const [loadingPosts, setLoadingPosts] = useState(false);
@@ -59,7 +59,7 @@ export default function PostsClient({ initialPosts }: Props) {
       if (!session) {
         setPosts([]);
         setError(null);
-        setShowOnlyStarred(false);
+        setShowOnlyMine(false);
         setSearchTerm("");
       }
     });
@@ -76,7 +76,7 @@ export default function PostsClient({ initialPosts }: Props) {
           .from("posts")
           .select("id, created_at, content, tags, is_starred, user_id")
           .order("created_at", { ascending: false });
-        if (session && showOnlyStarred) {
+        if (session && showOnlyMine) {
           queryBuilder = queryBuilder.eq("user_id", session.user.id);
         }
         if (debouncedSearchTerm.trim()) {
@@ -126,7 +126,7 @@ export default function PostsClient({ initialPosts }: Props) {
     };
     fetchAndSetPosts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, debouncedSearchTerm, showOnlyStarred]);
+  }, [session, debouncedSearchTerm, showOnlyMine]);
 
   // Effect to fetch signed URLs for all unique image paths when posts change
   useEffect(() => {
@@ -258,7 +258,7 @@ export default function PostsClient({ initialPosts }: Props) {
     setSession(null);
     setPosts([]);
     setError(null);
-    setShowOnlyStarred(false);
+    setShowOnlyMine(false);
     setSearchTerm("");
     setLoadingSession(false);
   };
@@ -270,7 +270,7 @@ export default function PostsClient({ initialPosts }: Props) {
 
   const renderPostsList = () => {
     let visiblePosts = posts;
-    if (showOnlyStarred) {
+    if (showOnlyMine) {
       visiblePosts = visiblePosts.filter((p) => p.is_starred);
     }
     if (posts.length === 0 && loadingPosts) {
@@ -296,10 +296,10 @@ export default function PostsClient({ initialPosts }: Props) {
         </p>
       );
     }
-    if (visiblePosts.length === 0 && showOnlyStarred) {
+    if (visiblePosts.length === 0 && showOnlyMine) {
       return (
         <p className="text-center text-gray-500">
-          You have no starred posts {searchTerm.trim() ? `matching "${searchTerm}"` : ''}.
+          You have no posts {searchTerm.trim() ? `matching "${searchTerm}"` : ''}.
         </p>
       );
     }
@@ -378,14 +378,14 @@ export default function PostsClient({ initialPosts }: Props) {
           {session && (
             <>
               <button
-                onClick={() => setShowOnlyStarred(!showOnlyStarred)}
+                onClick={() => setShowOnlyMine(!showOnlyMine)}
                 className={`px-4 py-2 rounded border border-gray-300 text-sm font-medium transition-colors disabled:opacity-50 ${
-                  showOnlyStarred
+                  showOnlyMine
                     ? "bg-yellow-400 border-yellow-500 text-yellow-900 hover:bg-yellow-300"
                     : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                {showOnlyStarred ? "Show All Posts" : "Show Only My Posts"}
+                {showOnlyMine ? "Show All Posts" : "Show Only My Posts"}
               </button>
               <Link href="/quiz" legacyBehavior>
                 <a className="inline-flex items-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">

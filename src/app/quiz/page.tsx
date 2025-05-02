@@ -39,6 +39,7 @@ export default function QuizPage() {
   const [postList, setPostList] = useState<Post[]>([]);
   const [selectedPostIds, setSelectedPostIds] = useState<string[]>([]);
   const [postSearchTerm, setPostSearchTerm] = useState('');
+  const [postTableVisible, setPostTableVisible] = useState(false);
 
   // Fetch quizzes on mount
   useEffect(() => {
@@ -133,57 +134,68 @@ export default function QuizPage() {
       </div>
       {/* Quiz Generation Controls */}
       <div className="mb-6">
-        <h2 className="text-lg font-bold mb-2">Select Posts for Quiz</h2>
-        <input
-          type="search"
-          value={postSearchTerm}
-          onChange={e => setPostSearchTerm(e.target.value)}
-          placeholder="Search posts..."
-          className="border rounded px-2 py-1 mb-2 w-full"
-        />
-        <table className="min-w-full border">
-          <thead>
-            <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  checked={postList.length > 0 && postList.filter(p => p.content.toLowerCase().includes(postSearchTerm.toLowerCase())).every(p => selectedPostIds.includes(p.id))}
-                  onChange={e => {
-                    const visible = postList.filter(p => p.content.toLowerCase().includes(postSearchTerm.toLowerCase()));
-                    if (e.target.checked) setSelectedPostIds(ids => Array.from(new Set([...ids, ...visible.map(p => p.id)])));
-                    else setSelectedPostIds(ids => ids.filter(id => !visible.map(p => p.id).includes(id)));
-                  }}
-                />
-              </th>
-              <th>Content</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {postList
-              .filter(p => p.content.toLowerCase().includes(postSearchTerm.toLowerCase()))
-              .map(post => (
-                <tr key={post.id}>
-                  <td>
+        <button
+          className="mb-2 px-4 py-2 rounded border border-blue-600 bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium"
+          onClick={() => setPostTableVisible(v => !v)}
+          type="button"
+        >
+          {postTableVisible ? 'Hide Post Selection' : 'Select Posts for Quiz'}
+        </button>
+        {postTableVisible && (
+          <div>
+            <h2 className="text-lg font-bold mb-2">Select Posts for Quiz</h2>
+            <input
+              type="search"
+              value={postSearchTerm}
+              onChange={e => setPostSearchTerm(e.target.value)}
+              placeholder="Search posts..."
+              className="border rounded px-2 py-1 mb-2 w-full"
+            />
+            <table className="min-w-full border">
+              <thead>
+                <tr>
+                  <th>
                     <input
                       type="checkbox"
-                      checked={selectedPostIds.includes(post.id)}
-                      onChange={() => {
-                        setSelectedPostIds(ids =>
-                          ids.includes(post.id)
-                            ? ids.filter(id => id !== post.id)
-                            : [...ids, post.id]
-                        );
+                      checked={postList.length > 0 && postList.filter(p => p.content.toLowerCase().includes(postSearchTerm.toLowerCase())).every(p => selectedPostIds.includes(p.id))}
+                      onChange={e => {
+                        const visible = postList.filter(p => p.content.toLowerCase().includes(postSearchTerm.toLowerCase()));
+                        if (e.target.checked) setSelectedPostIds(ids => Array.from(new Set([...ids, ...visible.map(p => p.id)])));
+                        else setSelectedPostIds(ids => ids.filter(id => !visible.map(p => p.id).includes(id)));
                       }}
                     />
-                  </td>
-                  <td>{post.content.substring(0, 60)}...</td>
-                  <td>{new Date(post.created_at).toLocaleDateString()}</td>
+                  </th>
+                  <th>Content</th>
+                  <th>Date</th>
                 </tr>
-              ))}
-          </tbody>
-        </table>
-        <div className="mt-2 text-sm text-gray-600">{selectedPostIds.length} post(s) selected</div>
+              </thead>
+              <tbody>
+                {postList
+                  .filter(p => p.content.toLowerCase().includes(postSearchTerm.toLowerCase()))
+                  .map(post => (
+                    <tr key={post.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedPostIds.includes(post.id)}
+                          onChange={() => {
+                            setSelectedPostIds(ids =>
+                              ids.includes(post.id)
+                                ? ids.filter(id => id !== post.id)
+                                : [...ids, post.id]
+                            );
+                          }}
+                        />
+                      </td>
+                      <td>{post.content.substring(0, 60)}...</td>
+                      <td>{new Date(post.created_at).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+            <div className="mt-2 text-sm text-gray-600">{selectedPostIds.length} post(s) selected</div>
+          </div>
+        )}
       </div>
       <div className="mb-6 flex flex-wrap items-end gap-4">
         <div>

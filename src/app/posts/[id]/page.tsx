@@ -62,15 +62,6 @@ export default function PostDetailPage() {
   const router = useRouter();
   const postId = params?.id as string;
 
-  // Debug logs for summary rendering (must be before any early returns)
-  useEffect(() => {
-    console.log('post:', post);
-    console.log('patientSummary:', patientSummary);
-    console.log('tags:', post?.tags);
-    console.log('patientSummaryLoading:', patientSummaryLoading);
-    console.log('patientSummaryError:', patientSummaryError);
-  }, [post, patientSummary, patientSummaryLoading, patientSummaryError]);
-
   useEffect(() => {
     const checkSessionAndFetch = async () => {
       setLoading(true);

@@ -57,6 +57,7 @@ export default function PostDetailPage() {
   const [patientSummaryLoading, setPatientSummaryLoading] = useState(false);
   const [patientSummaryError, setPatientSummaryError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
+  const [hasTriedGenerate, setHasTriedGenerate] = useState(false);
   const params = useParams();
   const router = useRouter();
   const postId = params?.id as string;
@@ -400,6 +401,7 @@ export default function PostDetailPage() {
 
   const handleGeneratePatientSummary = async (customFeedback?: string) => {
     if (!post) return;
+    setHasTriedGenerate(true);
     setPatientSummaryLoading(true);
     setPatientSummaryError(null);
     try {
@@ -602,7 +604,7 @@ export default function PostDetailPage() {
         {patientSummaryLoading && (
           <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded text-sm text-green-700">Generating summary...</div>
         )}
-        {patientSummaryError && (
+        {hasTriedGenerate && patientSummaryError && (
           <div className="p-4 border-l-4 border-red-300 bg-red-50 rounded text-sm text-red-700">{patientSummaryError}</div>
         )}
         {patientSummary && !patientSummaryLoading && !patientSummaryError && (

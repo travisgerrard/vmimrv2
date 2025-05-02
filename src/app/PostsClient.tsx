@@ -16,6 +16,7 @@ export type Post = {
   content: string;
   tags: string[] | null;
   is_starred: boolean;
+  user_id: string;
   imagePaths?: string[];
   hasPdf?: boolean;
 };
@@ -84,7 +85,10 @@ export default function PostsClient({ initialPosts }: Props) {
         }
         const { data: postsData, error: fetchError } = await queryBuilder;
         if (fetchError) throw fetchError;
-        let postsWithImages: Post[] = postsData || [];
+        let postsWithImages: Post[] = (postsData || []).map((post: any) => ({
+          ...post,
+          user_id: post.user_id || '',
+        }));
         if (postsWithImages.length > 0) {
           const postIds = postsWithImages.map((p) => p.id);
           const { data: mediaFiles, error: mediaError } = await supabase
@@ -109,6 +113,7 @@ export default function PostsClient({ initialPosts }: Props) {
             });
             postsWithImages = postsWithImages.map((post) => ({
               ...post,
+              user_id: post.user_id || '',
               imagePaths: postMediaInfo[post.id]?.imagePaths || [],
               hasPdf: postMediaInfo[post.id]?.hasPdf || false,
             }));
@@ -203,7 +208,10 @@ export default function PostsClient({ initialPosts }: Props) {
           .order("created_at", { ascending: false });
         const { data: postsData, error: fetchError } = await queryBuilder;
         if (fetchError) throw fetchError;
-        let postsWithImages: Post[] = postsData || [];
+        let postsWithImages: Post[] = (postsData || []).map((post: any) => ({
+          ...post,
+          user_id: post.user_id || '',
+        }));
         if (postsWithImages.length > 0) {
           const postIds = postsWithImages.map((p) => p.id);
           const { data: mediaFiles, error: mediaError } = await supabase
@@ -228,6 +236,7 @@ export default function PostsClient({ initialPosts }: Props) {
             });
             postsWithImages = postsWithImages.map((post) => ({
               ...post,
+              user_id: post.user_id || '',
               imagePaths: postMediaInfo[post.id]?.imagePaths || [],
               hasPdf: postMediaInfo[post.id]?.hasPdf || false,
             }));
@@ -252,6 +261,14 @@ export default function PostsClient({ initialPosts }: Props) {
     })();
   }, [session]);
 
+  useEffect(() => {
+    if (session) {
+      console.log('Current session user ID:', session.user.id);
+    } else {
+      console.log('No user session');
+    }
+  }, [session]);
+
   const handleLogout = async () => {
     setLoadingSession(true);
     await supabase.auth.signOut();
@@ -270,8 +287,8 @@ export default function PostsClient({ initialPosts }: Props) {
 
   const renderPostsList = () => {
     let visiblePosts = posts;
-    if (showOnlyMine) {
-      visiblePosts = visiblePosts.filter((p) => p.is_starred);
+    if (showOnlyMine && session) {
+      visiblePosts = visiblePosts.filter((p) => p.user_id === session.user.id);
     }
     if (posts.length === 0 && loadingPosts) {
       return <p className="text-center text-gray-500">Loading posts...</p>;

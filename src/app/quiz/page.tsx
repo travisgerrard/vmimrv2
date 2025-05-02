@@ -198,6 +198,11 @@ export default function QuizPage() {
         )}
       </div>
       <div className="mb-6 flex flex-wrap items-end gap-4">
+        {selectedPostIds.length > 0 && (
+          <div className="w-full mb-2 p-2 rounded bg-yellow-100 text-yellow-800 border border-yellow-300 text-sm font-semibold">
+            Date range is <b>ignored</b> when posts are selected. Quiz will use only the selected posts.
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-gray-700">From</label>
           <input type="date" value={quizRange.from} onChange={e => setQuizRange(r => ({ ...r, from: e.target.value }))} className="border rounded px-2 py-1" />

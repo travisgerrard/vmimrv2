@@ -606,7 +606,7 @@ export default function PostDetailPage() {
             <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded text-sm text-green-700">Generating summary...</div>
           )}
           {patientSummary && !patientSummaryLoading && !patientSummaryError && (
-            <>
+            <div>
               <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded mb-2">
                 <div className="text-sm text-gray-800 prose prose-sm max-w-none">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -635,7 +635,7 @@ export default function PostDetailPage() {
                   Regenerate with Feedback
                 </button>
               </div>
-            </>
+            </div>
           )}
           {!patientSummary && !patientSummaryLoading && (
             <button

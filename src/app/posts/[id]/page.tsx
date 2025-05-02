@@ -609,7 +609,11 @@ export default function PostDetailPage() {
         )}
         {patientSummary && !patientSummaryLoading && !patientSummaryError && (
           <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded mb-2">
-            <div className="text-sm text-gray-800 whitespace-pre-line">{patientSummary.summary}</div>
+            <div className="text-sm text-gray-800 prose prose-sm max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {patientSummary.summary}
+              </ReactMarkdown>
+            </div>
           </div>
         )}
         <div className="flex flex-col gap-2 mt-2">

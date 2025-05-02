@@ -90,4 +90,8 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ summary: saved.summary_text, id: saved.id });
-} 
+}
+
+export const config = {
+  runtime: 'edge',
+}; 

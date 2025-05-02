@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
 import type { Session } from '@supabase/supabase-js'; // Import Session type
 import Image from 'next/image';
 import { Fragment } from 'react';
+import PatientSummarySection from './PatientSummarySection';
 
 // Define MediaFile type
 type MediaFile = {
@@ -424,30 +425,28 @@ export default function PostDetailPage() {
     }
   };
 
-   if (loading) {
-     return <div className="p-8 text-center">Loading post details...</div>;
-   }
+  if (loading) {
+    return <div className="p-8 text-center">Loading post details...</div>;
+  }
+  if (error && !post) {
+    return (
+      <div className="container mx-auto p-4 md:p-8 text-center">
+        <p className="text-red-600 mb-4">{error}</p>
+        <Link href="/" legacyBehavior><a className="text-blue-600 hover:underline">Go back home</a></Link>
+      </div>
+    );
+  }
+  if (!post) {
+    return (
+      <div className="container mx-auto p-4 md:p-8 text-center">
+        <p className="text-gray-600 mb-4">Post data could not be loaded.</p>
+        <Link href="/" legacyBehavior><a className="text-blue-600 hover:underline">Go back home</a></Link>
+      </div>
+    );
+  }
 
-   if (error && !post) {
-       return (
-         <div className="container mx-auto p-4 md:p-8 text-center">
-           <p className="text-red-600 mb-4">{error}</p>
-           <Link href="/" legacyBehavior><a className="text-blue-600 hover:underline">Go back home</a></Link>
-         </div>
-       );
-   }
-
-   if (!post) {
-        return (
-            <div className="container mx-auto p-4 md:p-8 text-center">
-                <p className="text-gray-600 mb-4">Post data could not be loaded.</p>
-                 <Link href="/" legacyBehavior><a className="text-blue-600 hover:underline">Go back home</a></Link>
-            </div>
-        );
-   }
-
-   const imageFiles = mediaFiles.filter(file => file.file_type?.startsWith('image/'));
-   const otherFiles = mediaFiles.filter(file => !file.file_type?.startsWith('image/'));
+  const imageFiles = mediaFiles.filter(file => file.file_type?.startsWith('image/'));
+  const otherFiles = mediaFiles.filter(file => !file.file_type?.startsWith('image/'));
 
   return (
     <div className="container mx-auto p-6 md:p-10 max-w-4xl font-sans">
@@ -599,55 +598,15 @@ export default function PostDetailPage() {
       )}
 
       {/* --- Patient Summary Section --- */}
-      {post.tags && post.tags.includes('patient') && (
-        <div className="mb-6">
-          <h3 className="font-semibold text-green-700 mb-2">Patient-Friendly Summary</h3>
-          {patientSummaryLoading && (
-            <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded text-sm text-green-700">Generating summary...</div>
-          )}
-          {patientSummary && !patientSummaryLoading && !patientSummaryError && (
-            <div>
-              <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded mb-2">
-                <div className="text-sm text-gray-800 prose prose-sm max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {patientSummary.summary}
-                  </ReactMarkdown>
-                </div>
-              </div>
-              {/* Regenerate with Feedback UI always visible when summary exists */}
-              <div className="flex flex-col gap-2 mt-2">
-                {patientSummaryError && (
-                  <div className="p-4 border-l-4 border-red-300 bg-red-50 rounded text-sm text-red-700">{patientSummaryError}</div>
-                )}
-                <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                  placeholder="Optional: Give feedback or instructions to improve the summary (e.g., 'simplify more', 'focus on diet advice')"
-                  value={feedback}
-                  onChange={e => setFeedback(e.target.value)}
-                  rows={2}
-                  disabled={patientSummaryLoading}
-                />
-                <button
-                  className="px-4 py-2 rounded border border-green-600 bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors disabled:opacity-50"
-                  onClick={() => handleGeneratePatientSummary(feedback)}
-                  disabled={patientSummaryLoading}
-                >
-                  Regenerate with Feedback
-                </button>
-              </div>
-            </div>
-          )}
-          {!patientSummary && !patientSummaryLoading && (
-            <button
-              className="px-4 py-2 rounded border border-green-600 bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors disabled:opacity-50 w-full"
-              onClick={() => handleGeneratePatientSummary(''); }
-              disabled={patientSummaryLoading}
-            >
-              Generate Patient-Friendly Summary
-            </button>
-          )}
-        </div>
-      )}
+      <PatientSummarySection
+        patientSummary={patientSummary}
+        patientSummaryLoading={patientSummaryLoading}
+        patientSummaryError={patientSummaryError}
+        feedback={feedback}
+        setFeedback={setFeedback}
+        handleGeneratePatientSummary={handleGeneratePatientSummary}
+        post={post}
+      />
       {/* --- End Patient Summary Section --- */}
       <div className="mt-8 text-sm text-gray-500 border-t border-gray-200 pt-4">
         <p>Created: {new Date(post.created_at).toLocaleString()}</p>

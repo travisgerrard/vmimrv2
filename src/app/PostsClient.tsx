@@ -373,7 +373,7 @@ export default function PostsClient({ initialPosts }: Props) {
   return (
     <main className="container mx-auto p-4 md:p-8 font-sans">
       <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Your Posts</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">{session ? 'Your Posts' : 'All Posts'}</h1>
         <div className="flex items-center gap-4">
           {session && (
             <>

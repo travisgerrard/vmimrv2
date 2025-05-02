@@ -34,8 +34,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Post not found' }, { status: 404 });
   }
 
-  // Only allow summary if '@patient' tag is present
-  if (!post.tags || !post.tags.includes('@patient')) {
+  // Only allow summary if 'patient' tag is present
+  if (!post.tags || !post.tags.includes('patient')) {
     return new NextResponse(null, { status: 204 }); // No Content
   }
 

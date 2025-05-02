@@ -610,7 +610,7 @@ export default function PostDetailPage() {
       )}
 
       {/* --- Patient Summary Section --- */}
-      {post.tags && post.tags.includes('@patient') && (
+      {post.tags && post.tags.includes('patient') && (
         <div className="mb-6">
           <h3 className="font-semibold text-green-700 mb-2">Patient-Friendly Summary</h3>
           {patientSummaryLoading && (

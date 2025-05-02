@@ -68,63 +68,63 @@ export default function PostsClient({ initialPosts }: Props) {
 
   // Fetch posts when session is available OR when debounced search term or starred filter changes
   useEffect(() => {
-    if (session) {
-      const fetchAndSetPosts = async () => {
-        setLoadingPosts(true);
-        setError(null);
-        try {
-          let queryBuilder = supabase
-            .from("posts")
-            .select("id, created_at, content, tags, is_starred")
-            .eq("user_id", session.user.id);
-          if (debouncedSearchTerm.trim()) {
-            queryBuilder = queryBuilder.ilike("content", `%${debouncedSearchTerm.trim()}%`);
-          }
-          queryBuilder = queryBuilder.order("created_at", { ascending: false });
-          const { data: postsData, error: fetchError } = await queryBuilder;
-          if (fetchError) throw fetchError;
-          let postsWithImages: Post[] = postsData || [];
-          if (postsWithImages.length > 0) {
-            const postIds = postsWithImages.map((p) => p.id);
-            const { data: mediaFiles, error: mediaError } = await supabase
-              .from("media_files")
-              .select("post_id, file_path, file_type")
-              .in("post_id", postIds);
-            if (!mediaError && mediaFiles) {
-              const postMediaInfo: Record<string, { imagePaths: string[]; hasPdf: boolean }> = {};
-              mediaFiles.forEach((file) => {
-                if (!file.post_id || !file.file_path) return;
-                if (!postMediaInfo[file.post_id]) {
-                  postMediaInfo[file.post_id] = { imagePaths: [], hasPdf: false };
-                }
-                if (file.file_type?.includes("pdf")) {
-                  postMediaInfo[file.post_id].hasPdf = true;
-                }
-                if (file.file_type?.startsWith("image/")) {
-                  if (!postMediaInfo[file.post_id].imagePaths.includes(file.file_path)) {
-                    postMediaInfo[file.post_id].imagePaths.push(file.file_path);
-                  }
-                }
-              });
-              postsWithImages = postsWithImages.map((post) => ({
-                ...post,
-                imagePaths: postMediaInfo[post.id]?.imagePaths || [],
-                hasPdf: postMediaInfo[post.id]?.hasPdf || false,
-              }));
-            }
-          }
-          setPosts(postsWithImages);
-          sessionStorage.setItem('postsCache', JSON.stringify(postsWithImages));
-        } catch (err) {
-          const message = err instanceof Error ? err.message : "An unknown error occurred";
-          setError(`Failed to load posts: ${message}`);
-          setPosts([]);
-        } finally {
-          setLoadingPosts(false);
+    const fetchAndSetPosts = async () => {
+      setLoadingPosts(true);
+      setError(null);
+      try {
+        let queryBuilder = supabase
+          .from("posts")
+          .select("id, created_at, content, tags, is_starred, user_id")
+          .order("created_at", { ascending: false });
+        if (session && showOnlyStarred) {
+          queryBuilder = queryBuilder.eq("user_id", session.user.id);
         }
-      };
-      fetchAndSetPosts();
-    }
+        if (debouncedSearchTerm.trim()) {
+          queryBuilder = queryBuilder.ilike("content", `%${debouncedSearchTerm.trim()}%`);
+        }
+        const { data: postsData, error: fetchError } = await queryBuilder;
+        if (fetchError) throw fetchError;
+        let postsWithImages: Post[] = postsData || [];
+        if (postsWithImages.length > 0) {
+          const postIds = postsWithImages.map((p) => p.id);
+          const { data: mediaFiles, error: mediaError } = await supabase
+            .from("media_files")
+            .select("post_id, file_path, file_type")
+            .in("post_id", postIds);
+          if (!mediaError && mediaFiles) {
+            const postMediaInfo: Record<string, { imagePaths: string[]; hasPdf: boolean }> = {};
+            mediaFiles.forEach((file) => {
+              if (!file.post_id || !file.file_path) return;
+              if (!postMediaInfo[file.post_id]) {
+                postMediaInfo[file.post_id] = { imagePaths: [], hasPdf: false };
+              }
+              if (file.file_type?.includes("pdf")) {
+                postMediaInfo[file.post_id].hasPdf = true;
+              }
+              if (file.file_type?.startsWith("image/")) {
+                if (!postMediaInfo[file.post_id].imagePaths.includes(file.file_path)) {
+                  postMediaInfo[file.post_id].imagePaths.push(file.file_path);
+                }
+              }
+            });
+            postsWithImages = postsWithImages.map((post) => ({
+              ...post,
+              imagePaths: postMediaInfo[post.id]?.imagePaths || [],
+              hasPdf: postMediaInfo[post.id]?.hasPdf || false,
+            }));
+          }
+        }
+        setPosts(postsWithImages);
+        sessionStorage.setItem('postsCache', JSON.stringify(postsWithImages));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "An unknown error occurred";
+        setError(`Failed to load posts: ${message}`);
+        setPosts([]);
+      } finally {
+        setLoadingPosts(false);
+      }
+    };
+    fetchAndSetPosts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, debouncedSearchTerm, showOnlyStarred]);
 
@@ -385,7 +385,7 @@ export default function PostsClient({ initialPosts }: Props) {
                     : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                {showOnlyStarred ? "★ Show All" : "☆ Show Starred"}
+                {showOnlyStarred ? "Show All Posts" : "Show Only My Posts"}
               </button>
               <Link href="/quiz" legacyBehavior>
                 <a className="inline-flex items-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">

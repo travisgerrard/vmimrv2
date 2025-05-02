@@ -601,52 +601,54 @@ export default function PostDetailPage() {
       )}
 
       {/* --- Patient Summary Section --- */}
-      <div className="mb-6">
-        <h3 className="font-semibold text-green-700 mb-2">Patient-Friendly Summary</h3>
-        {patientSummaryLoading && (
-          <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded text-sm text-green-700">Generating summary...</div>
-        )}
-        {patientSummary && !patientSummaryLoading && !patientSummaryError && (
-          <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded mb-2">
-            <div className="text-sm text-gray-800 prose prose-sm max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {patientSummary.summary}
-              </ReactMarkdown>
+      {post.tags && post.tags.includes('@patient') && (
+        <div className="mb-6">
+          <h3 className="font-semibold text-green-700 mb-2">Patient-Friendly Summary</h3>
+          {patientSummaryLoading && (
+            <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded text-sm text-green-700">Generating summary...</div>
+          )}
+          {patientSummary && !patientSummaryLoading && !patientSummaryError && (
+            <div className="p-4 border-l-4 border-green-300 bg-green-50 rounded mb-2">
+              <div className="text-sm text-gray-800 prose prose-sm max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {patientSummary.summary}
+                </ReactMarkdown>
+              </div>
             </div>
-          </div>
-        )}
-        {!patientSummary && !patientSummaryLoading && (
-          <button
-            className="px-4 py-2 rounded border border-green-600 bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors disabled:opacity-50 w-full"
-            onClick={() => { setHasTriedGenerate(true); handleGeneratePatientSummary(''); }}
-            disabled={patientSummaryLoading}
-          >
-            Generate Patient-Friendly Summary
-          </button>
-        )}
-        {hasTriedGenerate && !patientSummaryLoading && !patientSummary && (
-          <div className="flex flex-col gap-2 mt-2">
-            {patientSummaryError && (
-              <div className="p-4 border-l-4 border-red-300 bg-red-50 rounded text-sm text-red-700">{patientSummaryError}</div>
-            )}
-            <textarea
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-              placeholder="Optional: Give feedback or instructions to improve the summary (e.g., 'simplify more', 'focus on diet advice')"
-              value={feedback}
-              onChange={e => setFeedback(e.target.value)}
-              rows={2}
-              disabled={patientSummaryLoading}
-            />
+          )}
+          {!patientSummary && !patientSummaryLoading && (
             <button
-              className="px-4 py-2 rounded border border-green-600 bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors disabled:opacity-50"
-              onClick={() => handleGeneratePatientSummary(feedback)}
+              className="px-4 py-2 rounded border border-green-600 bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors disabled:opacity-50 w-full"
+              onClick={() => { setHasTriedGenerate(true); handleGeneratePatientSummary(''); }}
               disabled={patientSummaryLoading}
             >
-              Regenerate with Feedback
+              Generate Patient-Friendly Summary
             </button>
-          </div>
-        )}
-      </div>
+          )}
+          {hasTriedGenerate && !patientSummaryLoading && !patientSummary && (
+            <div className="flex flex-col gap-2 mt-2">
+              {patientSummaryError && (
+                <div className="p-4 border-l-4 border-red-300 bg-red-50 rounded text-sm text-red-700">{patientSummaryError}</div>
+              )}
+              <textarea
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                placeholder="Optional: Give feedback or instructions to improve the summary (e.g., 'simplify more', 'focus on diet advice')"
+                value={feedback}
+                onChange={e => setFeedback(e.target.value)}
+                rows={2}
+                disabled={patientSummaryLoading}
+              />
+              <button
+                className="px-4 py-2 rounded border border-green-600 bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors disabled:opacity-50"
+                onClick={() => handleGeneratePatientSummary(feedback)}
+                disabled={patientSummaryLoading}
+              >
+                Regenerate with Feedback
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {/* --- End Patient Summary Section --- */}
       <div className="mt-8 text-sm text-gray-500 border-t border-gray-200 pt-4">
         <p>Created: {new Date(post.created_at).toLocaleString()}</p>

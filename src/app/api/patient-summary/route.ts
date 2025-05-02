@@ -24,14 +24,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ summary: existing.summary_text, id: existing.id });
   }
 
-  // Fetch post content
+  // Fetch post content (now also fetching tags)
   const { data: post, error: postError } = await supabase
     .from('posts')
-    .select('content, user_id')
+    .select('content, user_id, tags')
     .eq('id', post_id)
     .single();
   if (postError || !post) {
     return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+  }
+
+  // Only allow summary if '@patient' tag is present
+  if (!post.tags || !post.tags.includes('@patient')) {
+    return new NextResponse(null, { status: 204 }); // No Content
   }
 
   // Prepare OpenAI prompt

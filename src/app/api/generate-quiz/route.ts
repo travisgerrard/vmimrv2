@@ -7,6 +7,9 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(notes) || notes.length === 0) {
     return NextResponse.json({ error: 'No notes provided.' }, { status: 400 });
   }
+  if (numQuestions > 10) {
+    return NextResponse.json({ error: 'Maximum quiz question limit is 10.' }, { status: 400 });
+  }
 
   const openaiApiKey = process.env.OPENAI_API_KEY;
   if (!openaiApiKey) {

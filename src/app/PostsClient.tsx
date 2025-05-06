@@ -7,7 +7,6 @@ import type { Session } from "@supabase/supabase-js";
 import ReactMarkdown from "react-markdown";
 import Image from "next/image";
 import remarkGfm from 'remark-gfm';
-import { useRouter } from "next/navigation";
 import { Menu } from '@headlessui/react';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 
@@ -37,7 +36,6 @@ type Props = {
 };
 
 export default function PostsClient({ initialPosts }: Props) {
-  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [showOnlyMine, setShowOnlyMine] = useState(false);
@@ -282,11 +280,6 @@ export default function PostsClient({ initialPosts }: Props) {
     setLoadingSession(false);
   };
 
-  const handlePostClick = (postId: string) => {
-    sessionStorage.setItem('postsScroll', window.scrollY.toString());
-    router.push(`/posts/${postId}`);
-  };
-
   const renderPostsList = () => {
     let visiblePosts = posts;
     if (showOnlyMine && session) {
@@ -326,54 +319,53 @@ export default function PostsClient({ initialPosts }: Props) {
       return (
         <div ref={postsContainerRef} className="space-y-4">
           {visiblePosts.map((post) => (
-            <a
-              key={post.id}
-              className="block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150 cursor-pointer"
-              onClick={() => handlePostClick(post.id)}
-              tabIndex={0}
-              onKeyDown={e => { if (e.key === 'Enter') handlePostClick(post.id); }}
-            >
-              <div className="prose max-w-none mb-4 text-gray-700">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {post.content.substring(0, 200) + (post.content.length > 200 ? "..." : "")}
-                </ReactMarkdown>
-              </div>
-              {post.imagePaths && post.imagePaths.length > 0 && (
-                <div className="mt-2 grid grid-cols-4 gap-2">
-                  {post.imagePaths.slice(0, 4).map((path, index) => {
-                    const signedUrl = signedThumbnailUrls[path];
-                    return (
-                      <div key={index} className="w-full h-32 bg-gray-100 rounded flex items-center justify-center">
-                        {signedUrl === undefined ? (
-                          <span className="text-xs text-gray-500">...</span>
-                        ) : signedUrl ? (
-                          <Image
-                            src={signedUrl}
-                            alt={`Post thumbnail ${index + 1}`}
-                            className="w-full h-full object-contain rounded"
-                            width={128}
-                            height={128}
-                            loading="lazy"
-                            unoptimized
-                          />
-                        ) : (
-                          <span className="text-xs text-red-500">!</span>
-                        )}
-                      </div>
-                    );
-                  })}
+            <Link href={`/posts/${post.id}`} legacyBehavior key={post.id}>
+              <a
+                className="block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150 cursor-pointer"
+                tabIndex={0}
+              >
+                <div className="prose max-w-none mb-4 text-gray-700">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {post.content.substring(0, 200) + (post.content.length > 200 ? "..." : "")}
+                  </ReactMarkdown>
                 </div>
-              )}
-              <div className="text-xs text-gray-500 flex justify-between items-center mt-4 pt-3 border-t border-gray-100">
-                <span className="flex items-center">
-                  {post.hasPdf && <span className="mr-2" title="Contains PDF">📄</span>}
-                  {new Date(post.created_at).toLocaleString()}
-                </span>
-                <span className={`ml-2 ${post.is_starred ? "text-yellow-500" : "text-gray-400"}`}>
-                  {post.is_starred ? "★" : "☆"}
-                </span>
-              </div>
-            </a>
+                {post.imagePaths && post.imagePaths.length > 0 && (
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {post.imagePaths.slice(0, 4).map((path, index) => {
+                      const signedUrl = signedThumbnailUrls[path];
+                      return (
+                        <div key={index} className="w-full h-32 bg-gray-100 rounded flex items-center justify-center">
+                          {signedUrl === undefined ? (
+                            <span className="text-xs text-gray-500">...</span>
+                          ) : signedUrl ? (
+                            <Image
+                              src={signedUrl}
+                              alt={`Post thumbnail ${index + 1}`}
+                              className="w-full h-full object-contain rounded"
+                              width={128}
+                              height={128}
+                              loading="lazy"
+                              unoptimized
+                            />
+                          ) : (
+                            <span className="text-xs text-red-500">!</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="text-xs text-gray-500 flex justify-between items-center mt-4 pt-3 border-t border-gray-100">
+                  <span className="flex items-center">
+                    {post.hasPdf && <span className="mr-2" title="Contains PDF">📄</span>}
+                    {new Date(post.created_at).toLocaleString()}
+                  </span>
+                  <span className={`ml-2 ${post.is_starred ? "text-yellow-500" : "text-gray-400"}`}>
+                    {post.is_starred ? "★" : "☆"}
+                  </span>
+                </div>
+              </a>
+            </Link>
           ))}
         </div>
       );

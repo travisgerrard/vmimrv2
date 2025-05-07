@@ -1,5 +1,6 @@
 // Removed font import
 import "./globals.css";
+import SWRProvider from "./SWRProvider";
 
 // Removed font setup
 
@@ -25,8 +26,10 @@ export default function RootLayout({
         // Restore light gray background and base text color from earlier attempt
         className={`antialiased bg-gray-100 text-gray-900`}
       >
-        {/* Render children */}
-        {children}
+        <SWRProvider>
+          {/* Render children */}
+          {children}
+        </SWRProvider>
       </body>
     </html>
   );

@@ -81,7 +81,7 @@ export default function PostsClient({ initialPosts }: Props) {
           queryBuilder = queryBuilder.eq("user_id", session.user.id);
         }
         if (debouncedSearchTerm.trim()) {
-          queryBuilder = queryBuilder.ilike("content", `%${debouncedSearchTerm.trim()}%`);
+          queryBuilder = queryBuilder.textSearch('fts', debouncedSearchTerm.trim(), { type: 'websearch' });
         }
         const { data: postsData, error: fetchError } = await queryBuilder;
         if (fetchError) throw fetchError;

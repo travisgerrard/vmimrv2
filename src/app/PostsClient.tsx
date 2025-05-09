@@ -9,6 +9,7 @@ import Image from "next/image";
 import remarkGfm from 'remark-gfm';
 import { Menu } from '@headlessui/react';
 import { Bars3Icon } from '@heroicons/react/24/outline';
+import React from "react";
 
 // Define Post type
 export type Post = {
@@ -34,6 +35,10 @@ function useDebounce(value: string, delay: number): string {
 
 type Props = {
   initialPosts: Post[];
+};
+
+const markdownComponents = {
+  a: ((props: any) => <span {...props} style={{ color: "#2563eb", textDecoration: "underline", cursor: "not-allowed" }} />) as React.ComponentType<any>
 };
 
 export default function PostsClient({ initialPosts }: Props) {
@@ -320,56 +325,53 @@ export default function PostsClient({ initialPosts }: Props) {
       return (
         <div ref={postsContainerRef} className="space-y-4">
           {visiblePosts.map((post) => (
-            <div key={post.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150">
-              <Link href={`/posts/${post.id}`} legacyBehavior passHref>
-                <a
-                  className="block p-6 cursor-pointer focus:ring-2 focus:ring-blue-500"
-                  tabIndex={0}
-                  role="button"
-                  aria-label="Open post"
-                  style={{ textDecoration: "none" }}
-                >
-                  {/* You can add a summary/title here if you want a clickable area */}
-                  <div className="text-xs text-gray-500 flex justify-between items-center mb-2">
-                    <span className="flex items-center">
-                      {post.hasPdf && <span className="mr-2" title="Contains PDF">📄</span>}
-                      {new Date(post.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                </a>
-              </Link>
-              <div className="prose max-w-none mb-4 text-gray-700 px-6 pb-6">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {post.content.substring(0, 200) + (post.content.length > 200 ? "..." : "")}
-                </ReactMarkdown>
-              </div>
-              {post.imagePaths && post.imagePaths.length > 0 && (
-                <div className="mt-2 grid grid-cols-4 gap-2 px-6 pb-6">
-                  {post.imagePaths.slice(0, 4).map((path, index) => {
-                    const signedUrl = signedThumbnailUrls[path];
-                    return (
-                      <div key={index} className="w-full h-32 bg-gray-100 rounded flex items-center justify-center">
-                        {signedUrl === undefined ? (
-                          <span className="text-xs text-gray-500">...</span>
-                        ) : signedUrl ? (
-                          <Image
-                            src={signedUrl}
-                            alt={`Post thumbnail ${index + 1}`}
-                            className="w-full h-full object-contain rounded"
-                            width={128}
-                            height={128}
-                            loading="lazy"
-                            unoptimized
-                          />
-                        ) : (
-                          <span className="text-xs text-red-500">!</span>
-                        )}
-                      </div>
-                    );
-                  })}
+            <Link href={`/posts/${post.id}`} legacyBehavior passHref key={post.id}>
+              <a
+                className="block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150 cursor-pointer focus:ring-2 focus:ring-blue-500"
+                tabIndex={0}
+                role="button"
+                aria-label="Open post"
+                style={{ textDecoration: "none" }}
+              >
+                <div className="text-xs text-gray-500 flex justify-between items-center mb-2">
+                  <span className="flex items-center">
+                    {post.hasPdf && <span className="mr-2" title="Contains PDF">📄</span>}
+                    {new Date(post.created_at).toLocaleString()}
+                  </span>
                 </div>
-              )}
-            </div>
+                <div className="prose max-w-none mb-4 text-gray-700">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {post.content.substring(0, 200) + (post.content.length > 200 ? "..." : "")}
+                  </ReactMarkdown>
+                </div>
+                {post.imagePaths && post.imagePaths.length > 0 && (
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {post.imagePaths.slice(0, 4).map((path, index) => {
+                      const signedUrl = signedThumbnailUrls[path];
+                      return (
+                        <div key={index} className="w-full h-32 bg-gray-100 rounded flex items-center justify-center">
+                          {signedUrl === undefined ? (
+                            <span className="text-xs text-gray-500">...</span>
+                          ) : signedUrl ? (
+                            <Image
+                              src={signedUrl}
+                              alt={`Post thumbnail ${index + 1}`}
+                              className="w-full h-full object-contain rounded"
+                              width={128}
+                              height={128}
+                              loading="lazy"
+                              unoptimized
+                            />
+                          ) : (
+                            <span className="text-xs text-red-500">!</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </a>
+            </Link>
           ))}
         </div>
       );

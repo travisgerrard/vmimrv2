@@ -320,24 +320,31 @@ export default function PostsClient({ initialPosts }: Props) {
       return (
         <div ref={postsContainerRef} className="space-y-4">
           {visiblePosts.map((post) => (
-            <div key={post.id} className="relative group block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150 cursor-pointer focus-within:ring-2 focus-within:ring-blue-500">
-              {/* Absolutely positioned link overlay for click and right-click */}
-              <a
-                href={`/posts/${post.id}`}
-                tabIndex={-1}
-                className="absolute inset-0 z-10"
-                aria-label="Open post"
-                target="_self"
-                rel="noopener noreferrer"
-                style={{ borderRadius: 'inherit' }}
-              />
-              <div className="prose max-w-none mb-4 text-gray-700 relative z-20">
+            <div key={post.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150">
+              <Link href={`/posts/${post.id}`} legacyBehavior passHref>
+                <a
+                  className="block p-6 cursor-pointer focus:ring-2 focus:ring-blue-500"
+                  tabIndex={0}
+                  role="button"
+                  aria-label="Open post"
+                  style={{ textDecoration: "none" }}
+                >
+                  {/* You can add a summary/title here if you want a clickable area */}
+                  <div className="text-xs text-gray-500 flex justify-between items-center mb-2">
+                    <span className="flex items-center">
+                      {post.hasPdf && <span className="mr-2" title="Contains PDF">📄</span>}
+                      {new Date(post.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                </a>
+              </Link>
+              <div className="prose max-w-none mb-4 text-gray-700 px-6 pb-6">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {post.content.substring(0, 200) + (post.content.length > 200 ? "..." : "")}
                 </ReactMarkdown>
               </div>
               {post.imagePaths && post.imagePaths.length > 0 && (
-                <div className="mt-2 grid grid-cols-4 gap-2 relative z-20">
+                <div className="mt-2 grid grid-cols-4 gap-2 px-6 pb-6">
                   {post.imagePaths.slice(0, 4).map((path, index) => {
                     const signedUrl = signedThumbnailUrls[path];
                     return (
@@ -362,12 +369,6 @@ export default function PostsClient({ initialPosts }: Props) {
                   })}
                 </div>
               )}
-              <div className="text-xs text-gray-500 flex justify-between items-center mt-4 pt-3 border-t border-gray-100 relative z-20">
-                <span className="flex items-center">
-                  {post.hasPdf && <span className="mr-2" title="Contains PDF">📄</span>}
-                  {new Date(post.created_at).toLocaleString()}
-                </span>
-              </div>
             </div>
           ))}
         </div>

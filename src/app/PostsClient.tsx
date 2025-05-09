@@ -39,7 +39,12 @@ type Props = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const markdownComponents = {
-  a: ((props: any) => <span {...props} style={{ color: "#2563eb", textDecoration: "underline", cursor: "not-allowed" }} />) as React.ComponentType<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  a: (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (props: any) => <span {...props} style={{ color: "#2563eb", textDecoration: "underline", cursor: "not-allowed" }} />
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ) as React.ComponentType<any>
 };
 
 export default function PostsClient({ initialPosts }: Props) {

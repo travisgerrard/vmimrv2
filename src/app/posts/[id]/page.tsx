@@ -425,6 +425,14 @@ export default function PostDetailPage() {
     }
   };
 
+  // Set document title to first line of note after post is loaded
+  useEffect(() => {
+    if (post && typeof window !== 'undefined') {
+      const firstLine = post.content.split('\n').find(line => line.trim()) || 'Medical Note';
+      document.title = firstLine;
+    }
+  }, [post]);
+
   if (loading) {
     return <div className="p-8 text-center">Loading post details...</div>;
   }

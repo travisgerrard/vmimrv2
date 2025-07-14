@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm';
 import { Menu } from '@headlessui/react';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import React from "react";
+import { useRouter, useSearchParams } from 'next/navigation';
 
 // Define Post type
 export type Post = {
@@ -23,15 +24,6 @@ export type Post = {
   hasPdf?: boolean;
   summary?: string;
 };
-
-function useDebounce(value: string, delay: number): string {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
-}
 
 type Props = {
   initialPosts: Post[];
@@ -51,14 +43,16 @@ export default function PostsClient({ initialPosts }: Props) {
   const [session, setSession] = useState<Session | null>(null);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [showOnlyMine, setShowOnlyMine] = useState(false);
+  const [inputValue, setInputValue] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingSession, setLoadingSession] = useState(true);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signedThumbnailUrls, setSignedThumbnailUrls] = useState<Record<string, string | null>>({});
   const postsContainerRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   // Fetch session and listen for changes
   useEffect(() => {
@@ -79,7 +73,40 @@ export default function PostsClient({ initialPosts }: Props) {
     return () => subscription?.unsubscribe();
   }, []);
 
-  // Fetch posts when session is available OR when debounced search term or starred filter changes
+  // Initialize inputValue and searchTerm from URL on mount
+  useEffect(() => {
+    const q = searchParams?.get('q') || '';
+    setInputValue(q);
+    setSearchTerm(q);
+  // Only run on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounce inputValue to update searchTerm
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearchTerm(inputValue);
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [inputValue]);
+
+  // Update URL when searchTerm changes
+  useEffect(() => {
+    const q = searchParams?.get('q') || '';
+    if (searchTerm !== q) {
+      const params = new URLSearchParams(Array.from(searchParams?.entries() || []));
+      if (searchTerm) {
+        params.set('q', searchTerm);
+      } else {
+        params.delete('q');
+      }
+      router.replace(`?${params.toString()}`, { scroll: false });
+    }
+  // Only run when searchTerm changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]);
+
+  // Fetch posts when session is available OR when searchTerm or starred filter changes
   useEffect(() => {
     const fetchAndSetPosts = async () => {
       setLoadingPosts(true);
@@ -92,8 +119,9 @@ export default function PostsClient({ initialPosts }: Props) {
         if (session && showOnlyMine) {
           queryBuilder = queryBuilder.eq("user_id", session.user.id);
         }
-        if (debouncedSearchTerm.trim()) {
-          queryBuilder = queryBuilder.textSearch('fts', debouncedSearchTerm.trim(), { type: 'websearch' });
+        if (searchTerm.trim()) {
+          // Partial match for content, full match for tags
+          queryBuilder = queryBuilder.or(`content.ilike.%${searchTerm.trim()}%,tags.cs.{${searchTerm.trim()}}`);
         }
         const { data: postsData, error: fetchError } = await queryBuilder;
         if (fetchError) throw fetchError;
@@ -143,7 +171,7 @@ export default function PostsClient({ initialPosts }: Props) {
     };
     fetchAndSetPosts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, debouncedSearchTerm, showOnlyMine]);
+  }, [session, searchTerm, showOnlyMine]);
 
   // Effect to fetch signed URLs for all unique image paths when posts change
   useEffect(() => {
@@ -292,7 +320,7 @@ export default function PostsClient({ initialPosts }: Props) {
     setLoadingSession(false);
   };
 
-  const renderPostsList = () => {
+  const renderPostsList = useMemo(() => {
     let visiblePosts = posts;
     if (showOnlyMine && session) {
       visiblePosts = visiblePosts.filter((p) => p.user_id === session.user.id);
@@ -383,7 +411,7 @@ export default function PostsClient({ initialPosts }: Props) {
       );
     }
     return null;
-  };
+  }, [posts, showOnlyMine, session, loadingPosts, error, searchTerm, signedThumbnailUrls]);
 
   if (loadingSession) {
     return (
@@ -511,12 +539,12 @@ export default function PostsClient({ initialPosts }: Props) {
         <input
           type="search"
           placeholder="Search posts by content or tags..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
           className="block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 placeholder-gray-500"
         />
       </div>
-      {renderPostsList()}
+      {renderPostsList}
     </main>
   );
 } 

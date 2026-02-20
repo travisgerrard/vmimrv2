@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
@@ -21,8 +20,6 @@ export default function SettingsPage() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetMsg, setResetMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [sendingReset, setSendingReset] = useState(false);
-
-  const router = useRouter();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

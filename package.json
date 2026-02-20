@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cli": "node cli/medical-notes.mjs"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.2",

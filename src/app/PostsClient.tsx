@@ -444,6 +444,11 @@ export default function PostsClient({ initialPosts }: Props) {
                   Quiz
                 </a>
               </Link>
+              <Link href="/settings" legacyBehavior>
+                <a className="inline-flex items-center justify-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                  Settings
+                </a>
+              </Link>
               <Link href="/posts/new" legacyBehavior>
                 <a className="inline-flex items-center justify-center px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                   + New Post
@@ -496,6 +501,13 @@ export default function PostsClient({ initialPosts }: Props) {
                       {({ active }: { active: boolean }) => (
                         <Link href="/quiz" legacyBehavior>
                           <a className={`block px-4 py-2 text-sm ${active ? "bg-gray-100 text-gray-900" : "text-gray-700"}`}>Quiz</a>
+                        </Link>
+                      )}
+                    </Menu.Item>
+                    <Menu.Item>
+                      {({ active }: { active: boolean }) => (
+                        <Link href="/settings" legacyBehavior>
+                          <a className={`block px-4 py-2 text-sm ${active ? "bg-gray-100 text-gray-900" : "text-gray-700"}`}>Settings</a>
                         </Link>
                       )}
                     </Menu.Item>

@@ -2,6 +2,9 @@
   "name": "medical-notes",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "medical-notes": "./cli/medical-notes.mjs"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

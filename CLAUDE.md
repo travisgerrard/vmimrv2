@@ -17,11 +17,31 @@ There is no test suite in this project.
 
 `cli/medical-notes.mjs` lets an AI agent (or any script) create and query posts without the UI. Accounts are created manually in Supabase Dashboard → Authentication → Users.
 
-**Setup** — add to shell profile (or agent environment):
+### Agent install (no repo clone needed)
+
+The CLI has zero external dependencies — agents can download and run it directly:
+
+```bash
+curl -sL https://raw.githubusercontent.com/travisgerrard/vmimrv2/main/cli/medical-notes.mjs -o /tmp/mn.mjs
+
+MEDICAL_NOTES_EMAIL="you@example.com" \
+MEDICAL_NOTES_PASSWORD="yourpassword" \
+MEDICAL_NOTES_URL="https://www.vmimr.com" \
+  node /tmp/mn.mjs add "Research finding..." --tags cardiology
+```
+
+Or via npx (installs all repo deps — slower):
+```bash
+npx github:travisgerrard/vmimrv2 add "..." --tags cardiology
+```
+
+### Local dev setup
+
+Add to shell profile:
 ```bash
 export MEDICAL_NOTES_EMAIL="you@example.com"
 export MEDICAL_NOTES_PASSWORD="yourpassword"
-export MEDICAL_NOTES_URL="http://localhost:3000"   # or deployed URL
+export MEDICAL_NOTES_URL="http://localhost:3000"   # or https://www.vmimr.com
 ```
 
 **Usage:**

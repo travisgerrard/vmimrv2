@@ -151,6 +151,30 @@ async function cmdList(token, args) {
   console.log(`${posts.length} post${posts.length === 1 ? '' : 's'}`);
 }
 
+async function cmdDelete(token, args) {
+  const { positional, flags } = parseArgs(args);
+  const id = positional[0];
+
+  if (!id) {
+    console.error('Error: post ID required.  Usage: delete <post-id>');
+    process.exit(1);
+  }
+
+  // Confirm unless --force is passed
+  if (!flags.force) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await new Promise(resolve => rl.question(`Delete post ${id}? (y/N) `, resolve));
+    rl.close();
+    if (answer.toLowerCase() !== 'y') {
+      console.log('Cancelled.');
+      process.exit(0);
+    }
+  }
+
+  const result = await apiFetch(token, `/api/posts/${id}`, { method: 'DELETE' });
+  console.log(`Deleted: ${result.deleted}`);
+}
+
 // ── dispatch ──────────────────────────────────────────────────────────────────
 
 const [,, command, ...rest] = process.argv;
@@ -164,6 +188,7 @@ Commands:
   echo "text" | add [--tags ...]       Create a post from stdin
   list [--limit 20] [--tag x]          List recent posts
   search "query" [--limit 20]          Full-text search posts
+  delete <post-id> [--force]           Delete a post (--force skips confirmation)
 
 Env vars required:
   MEDICAL_NOTES_EMAIL      Your account email
@@ -182,6 +207,7 @@ switch (command) {
   case 'add':    await cmdAdd(token, rest); break;
   case 'list':   await cmdList(token, rest); break;
   case 'search': await cmdList(token, rest); break;
+  case 'delete': await cmdDelete(token, rest); break;
   default:
     console.error(`Unknown command: ${command}`);
     console.log(HELP);

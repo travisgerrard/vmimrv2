@@ -115,6 +115,11 @@ MEDICAL_NOTES_URL="${BASE_URL}" \\
             <p className="text-sm font-medium text-gray-700 mb-1">Search posts</p>
             <CodeBlock code={`node /tmp/mn.mjs search "semaglutide"`} />
           </div>
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-1">Delete a post</p>
+            <CodeBlock code={`node /tmp/mn.mjs delete <post-id>          # prompts for confirmation
+node /tmp/mn.mjs delete <post-id> --force  # skip confirmation`} />
+          </div>
         </div>
       </Section>
 

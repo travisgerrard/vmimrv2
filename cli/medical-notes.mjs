@@ -23,7 +23,7 @@
  *   npm run cli -- add --file ./note.md --tags cardiology
  */
 
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync, chmodSync } from 'fs';
 import { resolve, join } from 'path';
 import { homedir, tmpdir } from 'os';
 import { createInterface } from 'readline';
@@ -48,17 +48,25 @@ const BASE_URL = (process.env.MEDICAL_NOTES_URL ?? cfg.url ?? 'http://localhost:
 const EMAIL = process.env.MEDICAL_NOTES_EMAIL ?? cfg.email;
 const PASSWORD = process.env.MEDICAL_NOTES_PASSWORD ?? cfg.password;
 
+const isSignup = process.argv[2] === 'signup';
+
 if (!EMAIL || !PASSWORD) {
-  console.error('Error: credentials not found. Set env vars or create ~/.medical-notes.json');
-  console.error('');
-  console.error('  Option 1 — env vars:');
-  console.error('    export MEDICAL_NOTES_EMAIL="you@example.com"');
-  console.error('    export MEDICAL_NOTES_PASSWORD="yourpassword"');
-  console.error('');
-  console.error('  Option 2 — config file (~/.medical-notes.json):');
-  console.error('    { "email": "you@example.com", "password": "...", "url": "https://www.vmimr.com" }');
-  console.error('    chmod 600 ~/.medical-notes.json');
-  process.exit(1);
+  if (isSignup) {
+    // signup doesn't need existing credentials — allow through
+  } else {
+    console.error('Error: credentials not found. Set env vars or create ~/.medical-notes.json');
+    console.error('');
+    console.error('  Option 1 — env vars:');
+    console.error('    export MEDICAL_NOTES_EMAIL="you@example.com"');
+    console.error('    export MEDICAL_NOTES_PASSWORD="yourpassword"');
+    console.error('');
+    console.error('  Option 2 — config file (~/.medical-notes.json):');
+    console.error('    { "email": "you@example.com", "password": "...", "url": "https://www.vmimr.com" }');
+    console.error('    chmod 600 ~/.medical-notes.json');
+    console.error('');
+    console.error('  New user? Run: node cli/medical-notes.mjs signup');
+    process.exit(1);
+  }
 }
 
 // ── auth ─────────────────────────────────────────────────────────────────────
@@ -273,6 +281,80 @@ async function cmdList(token, args) {
   console.log(`${posts.length} post${posts.length === 1 ? '' : 's'}`);
 }
 
+async function promptLine(query) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise(resolve => rl.question(query, ans => { rl.close(); resolve(ans.trim()); }));
+}
+
+async function promptPassword(query) {
+  return new Promise(resolve => {
+    process.stdout.write(query);
+    let password = '';
+    const onData = (char) => {
+      char = char.toString('utf8');
+      if (char === '\r' || char === '\n') {
+        process.stdin.setRawMode?.(false);
+        process.stdin.removeListener('data', onData);
+        process.stdin.pause();
+        process.stdout.write('\n');
+        resolve(password);
+      } else if (char === '\x7f' || char === '\b') {
+        if (password.length > 0) { password = password.slice(0, -1); process.stdout.write('\b \b'); }
+      } else if (char === '\x03') {
+        process.exit();
+      } else {
+        password += char;
+        process.stdout.write('*');
+      }
+    };
+    process.stdin.setRawMode?.(true);
+    process.stdin.resume();
+    process.stdin.on('data', onData);
+  });
+}
+
+async function cmdSignup(_token, _args) {
+  console.log('Create a new medical-notes account\n');
+
+  const email = await promptLine('Email: ');
+  if (!email) { console.error('Email is required.'); process.exit(1); }
+
+  const password = await promptPassword('Password (min 6 chars): ');
+  if (!password || password.length < 6) { console.error('Password must be at least 6 characters.'); process.exit(1); }
+
+  const confirm = await promptPassword('Confirm password: ');
+  if (password !== confirm) { console.error('Passwords do not match.'); process.exit(1); }
+
+  const res = await fetch(`${BASE_URL}/api/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json();
+
+  if (!res.ok) {
+    console.error(`Signup failed: ${data.error ?? JSON.stringify(data)}`);
+    process.exit(1);
+  }
+
+  console.log(`\n${data.message}`);
+
+  // Offer to save credentials to config file
+  const cfgPath = join(homedir(), '.medical-notes.json');
+  const save = await promptLine('\nSave credentials to ~/.medical-notes.json? (Y/n) ');
+  if (save.toLowerCase() !== 'n') {
+    const cfgUrl = await promptLine(`App URL [${BASE_URL}]: `);
+    const cfg = {
+      email,
+      password,
+      url: cfgUrl.trim() || BASE_URL,
+    };
+    writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf-8');
+    chmodSync(cfgPath, 0o600);
+    console.log(`Saved to ${cfgPath} (chmod 600)`);
+  }
+}
+
 async function cmdDelete(token, args) {
   const { positional, flags } = parseArgs(args);
   const id = positional[0];
@@ -304,6 +386,7 @@ const HELP = `
 medical-notes CLI
 
 Commands:
+  signup                               Create a new account (interactive)
   add "content" [--tags tag1,tag2]     Create a post from inline text
   add --file ./note.md [--tags ...]    Create a post from a file
   echo "text" | add [--tags ...]       Create a post from stdin
@@ -325,6 +408,12 @@ Tip: when using npm run, add -- to pass flags correctly:
 
 if (!command || command === '--help' || command === 'help') {
   console.log(HELP);
+  process.exit(0);
+}
+
+// signup doesn't require existing credentials
+if (command === 'signup') {
+  await cmdSignup();
   process.exit(0);
 }
 

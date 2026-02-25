@@ -58,6 +58,7 @@ export default function PostDetailPage() {
   const [patientSummaryLoading, setPatientSummaryLoading] = useState(false);
   const [patientSummaryError, setPatientSummaryError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
+  const [showShareUrl, setShowShareUrl] = useState(false);
   const params = useParams();
   const router = useRouter();
   const postId = params?.id as string;
@@ -234,6 +235,7 @@ export default function PostDetailPage() {
                 setSecretUrl(linkToShare);
                 setPost(prevPost => prevPost ? { ...prevPost, secret_url: linkToShare } : null);
             }
+            setShowShareUrl(true);
         } catch (err) {
             console.error('Error generating share link:', err);
             const message = err instanceof Error ? err.message : 'Could not generate share link';
@@ -458,88 +460,94 @@ export default function PostDetailPage() {
 
   return (
     <div className="container mx-auto p-6 md:p-10 max-w-4xl font-sans">
-       <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
-            <Link href="/" legacyBehavior>
-              <a
-                className="text-blue-600 hover:underline"
-                onPointerDown={() => sessionStorage.setItem('postsScroll', window.scrollY.toString())}
-              >
-                &larr; Back to Posts
-              </a>
+
+      {/* ── Nav bar ───────────────────────────────────────────────── */}
+      <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
+        <Link href="/" legacyBehavior>
+          <a
+            className="text-blue-600 hover:underline text-sm"
+            onPointerDown={() => sessionStorage.setItem('postsScroll', window.scrollY.toString())}
+          >
+            &larr; Back to Posts
+          </a>
+        </Link>
+        {session && session.user.id === post.user_id && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleStar}
+              disabled={togglingStar}
+              className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors disabled:opacity-50 ${isStarred ? 'bg-yellow-100 border-yellow-400 text-yellow-800 hover:bg-yellow-200' : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'}`}
+            >
+              {togglingStar ? '…' : (isStarred ? '★ Starred' : '☆ Star')}
+            </button>
+            <Link href={`/posts/${post.id}/edit`} legacyBehavior>
+              <a className="px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors">Edit</a>
             </Link>
-            <div className="flex items-center flex-wrap gap-2"> {/* Added flex-wrap */}
-                {session && session.user.id === post.user_id && (
-                    <>
-                        <button
-                            onClick={toggleStar}
-                            disabled={togglingStar}
-                            className={`px-4 py-2 rounded border border-gray-300 text-sm font-medium transition-colors disabled:opacity-50 ${isStarred ? 'bg-yellow-400 border-yellow-500 text-yellow-900 hover:bg-yellow-300' : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'}`}
-                        >
-                            {togglingStar ? '...' : (isStarred ? '★ Unstar' : '☆ Star')}
-                        </button>
-                         <button
-                            onClick={generateShareLink}
-                            disabled={generatingLink || !!secretUrl}
-                            className="px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors disabled:opacity-50 disabled:bg-blue-300 disabled:border-blue-400"
-                        >
-                            {generatingLink ? 'Generating...' : (secretUrl ? 'Link Generated' : 'Generate Share Link')}
-                        </button>
-                         <button
-                            onClick={handleDelete}
-                            disabled={deleting}
-                            className="px-4 py-2 rounded border border-red-600 bg-red-500 text-white hover:bg-red-600 text-sm font-medium transition-colors disabled:opacity-50 disabled:bg-red-300 disabled:border-red-400"
-                         >
-                            {deleting ? 'Deleting...' : 'Delete Post'}
-                         </button>
-                         <Link href={`/posts/${post.id}/edit`} legacyBehavior>
-                            <a className="px-4 py-2 rounded border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm font-medium transition-colors">Edit</a>
-                         </Link>
-                    </>
-                )}
-            </div>
-       </div>
-
-        {secretUrl && (
-            <div className="mb-6 p-3 bg-gray-50 rounded border border-gray-200 flex items-center justify-between gap-4">
-                <span className="text-sm font-mono break-all text-gray-600">
-                    {`${window.location.origin}/share/${secretUrl}`}
-                </span>
-                <div className="flex items-center gap-2"> {/* Group copy and revoke */}
-                    <button
-                        onClick={() => copyToClipboard(`${window.location.origin}/share/${secretUrl}`)}
-                        className="px-2 py-1 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium"
-                    >
-                        Copy
-                    </button>
-                    {session && session.user.id === post.user_id && (
-                        <button
-                            onClick={revokeShareLink}
-                            disabled={revokingLink}
-                            className="px-2 py-1 rounded border border-red-300 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-medium disabled:opacity-50"
-                            title="Revoke this share link"
-                        >
-                            {revokingLink ? 'Revoking...' : 'Revoke'}
-                        </button>
-                    )}
-                </div>
-            </div>
+            <button
+              onClick={secretUrl ? () => setShowShareUrl(v => !v) : generateShareLink}
+              disabled={generatingLink}
+              className="px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {generatingLink ? 'Generating…' : (secretUrl ? (showShareUrl ? 'Hide Link' : 'Share Link') : 'Share')}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600 text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+          </div>
         )}
+      </div>
 
-       {error && <p className="text-red-600 text-sm mb-4">Note: {error}</p>}
-
-      <article className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-3">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
-      </article>
-
-      {post.tags && post.tags.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-6">
-          {post.tags.map(tag => (
-            <span key={tag} className="inline-block bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-sm font-medium text-blue-700">
-              {tag}
-            </span>
-          ))}
+      {/* ── Share URL (collapsed by default) ─────────────────────── */}
+      {secretUrl && showShareUrl && (
+        <div className="mb-4 p-3 bg-gray-50 rounded border border-gray-200 flex items-center justify-between gap-4">
+          <span className="text-sm font-mono break-all text-gray-600">
+            {`${window.location.origin}/share/${secretUrl}`}
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => copyToClipboard(`${window.location.origin}/share/${secretUrl}`)}
+              className="px-2 py-1 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium"
+            >
+              Copy
+            </button>
+            {session && session.user.id === post.user_id && (
+              <button
+                onClick={revokeShareLink}
+                disabled={revokingLink}
+                className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600 text-xs font-medium disabled:opacity-50"
+              >
+                {revokingLink ? 'Revoking…' : 'Revoke'}
+              </button>
+            )}
+          </div>
         </div>
       )}
+
+      {/* ── Metadata row: date + tags ─────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <span className="text-sm text-gray-400">
+          {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        </span>
+        {post.tags && post.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {post.tags.map(tag => (
+              <span key={tag} className="inline-block bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5 text-xs font-medium text-blue-600">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {error && <p className="text-red-600 text-sm mb-4">Note: {error}</p>}
+
+      <article className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
+      </article>
 
        {/* --- Summary Section Moved Here (Handles Pending/Error/Success) --- */}
        <div className="mt-4 mb-6"> {/* Added mb-6 */}

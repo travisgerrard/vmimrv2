@@ -39,6 +39,23 @@ const markdownComponents = {
   ) as React.ComponentType<any>
 };
 
+function PostsSkeleton() {
+  return (
+    <div className="space-y-4">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="p-6 bg-white rounded-lg shadow animate-pulse">
+          <div className="h-3 bg-gray-200 rounded w-24 mb-3" />
+          <div className="space-y-2">
+            <div className="h-4 bg-gray-200 rounded w-full" />
+            <div className="h-4 bg-gray-200 rounded w-5/6" />
+            <div className="h-4 bg-gray-200 rounded w-4/6" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function PostsClient({ initialPosts }: Props) {
   const [session, setSession] = useState<Session | null>(null);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
@@ -50,6 +67,7 @@ export default function PostsClient({ initialPosts }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [signedThumbnailUrls, setSignedThumbnailUrls] = useState<Record<string, string | null>>({});
   const postsContainerRef = useRef<HTMLDivElement | null>(null);
+  const firstFetchComplete = useRef(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -160,6 +178,7 @@ export default function PostsClient({ initialPosts }: Props) {
           }
         }
         setPosts(postsWithImages);
+        firstFetchComplete.current = true;
         sessionStorage.setItem('postsCache', JSON.stringify(postsWithImages));
       } catch (err) {
         const message = err instanceof Error ? err.message : "An unknown error occurred";
@@ -321,12 +340,14 @@ export default function PostsClient({ initialPosts }: Props) {
   };
 
   const renderPostsList = useMemo(() => {
+    // Show skeleton until the first real fetch completes — prevents flash of stale cached data
+    if (!firstFetchComplete.current && loadingPosts) {
+      return <PostsSkeleton />;
+    }
+
     let visiblePosts = posts;
     if (showOnlyMine && session) {
       visiblePosts = visiblePosts.filter((p) => p.user_id === session.user.id);
-    }
-    if (posts.length === 0 && loadingPosts) {
-      return <p className="text-center text-gray-500">Loading posts...</p>;
     }
     if (error) {
       return <p className="text-center text-red-600">{error}</p>;

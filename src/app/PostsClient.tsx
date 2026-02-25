@@ -39,6 +39,27 @@ const markdownComponents = {
   ) as React.ComponentType<any>
 };
 
+// Strip markdown image syntax for card previews, return text and whether images were present
+function stripMarkdownImages(content: string): { text: string; hasInlineImages: boolean } {
+  const hasInlineImages = /!\[.*?\]\(.*?\)/.test(content);
+  const text = content.replace(/!\[.*?\]\(.*?\)/g, '').replace(/\n{3,}/g, '\n\n').trim();
+  return { text, hasInlineImages };
+}
+
+function formatCardDate(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const isThisYear = date.getFullYear() === now.getFullYear();
+  if (isToday) {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+  if (isThisYear) {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function PostsSkeleton() {
   return (
     <div className="space-y-4">
@@ -382,43 +403,61 @@ export default function PostsClient({ initialPosts }: Props) {
           {visiblePosts.map((post) => (
             <Link href={`/posts/${post.id}`} legacyBehavior passHref key={post.id}>
               <a
-                className="block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150 cursor-pointer focus:ring-2 focus:ring-blue-500"
+                className="block p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150 cursor-pointer focus:ring-2 focus:ring-blue-500"
                 tabIndex={0}
                 role="button"
                 aria-label="Open post"
                 style={{ textDecoration: "none" }}
               >
-                <div className="text-xs text-gray-500 flex justify-between items-center mb-2">
-                  <span className="flex items-center">
-                    {post.hasPdf && <span className="mr-2" title="Contains PDF">📄</span>}
-                    {new Date(post.created_at).toLocaleString()}
-                  </span>
+                <div className="text-xs text-gray-400 flex items-center gap-2 mb-2">
+                  {post.hasPdf && <span title="Contains PDF">📄</span>}
+                  <span>{formatCardDate(post.created_at)}</span>
                 </div>
-                <div className="prose max-w-none mb-4 text-gray-700">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                    {post.content.substring(0, 200) + (post.content.length > 200 ? "..." : "")}
-                  </ReactMarkdown>
-                </div>
+                {(() => {
+                  const { text, hasInlineImages } = stripMarkdownImages(post.content);
+                  const preview = text.substring(0, 200) + (text.length > 200 ? "…" : "");
+                  return (
+                    <>
+                      <div className="prose max-w-none text-gray-700 text-sm">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                          {preview}
+                        </ReactMarkdown>
+                      </div>
+                      {hasInlineImages && (
+                        <span className="inline-block mt-1 text-xs text-gray-400">🖼 contains image</span>
+                      )}
+                    </>
+                  );
+                })()}
+                {post.tags && post.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-3">
+                    {post.tags.map(tag => (
+                      <span key={tag} className="inline-block bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5 text-xs font-medium text-blue-600">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {post.imagePaths && post.imagePaths.length > 0 && (
-                  <div className="mt-2 grid grid-cols-4 gap-2">
+                  <div className="mt-3 grid grid-cols-4 gap-2">
                     {post.imagePaths.slice(0, 4).map((path, index) => {
                       const signedUrl = signedThumbnailUrls[path];
                       return (
-                        <div key={index} className="w-full h-32 bg-gray-100 rounded flex items-center justify-center">
+                        <div key={index} className="w-full h-20 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
                           {signedUrl === undefined ? (
-                            <span className="text-xs text-gray-500">...</span>
+                            <span className="text-xs text-gray-400">…</span>
                           ) : signedUrl ? (
                             <Image
                               src={signedUrl}
                               alt={`Post thumbnail ${index + 1}`}
-                              className="w-full h-full object-contain rounded"
+                              className="w-full h-full object-cover rounded"
                               width={128}
-                              height={128}
+                              height={80}
                               loading="lazy"
                               unoptimized
                             />
                           ) : (
-                            <span className="text-xs text-red-500">!</span>
+                            <span className="text-xs text-red-400">!</span>
                           )}
                         </div>
                       );
@@ -447,9 +486,9 @@ export default function PostsClient({ initialPosts }: Props) {
       <div className="flex items-center justify-between mb-6 w-full">
         <h1 className="text-3xl font-bold text-gray-900 mb-0">{session ? 'Your Posts' : 'All Posts'}</h1>
         {/* Desktop Button Group */}
-        <div className="hidden sm:flex flex-row gap-2">
+        <div className="hidden sm:flex flex-row gap-2 items-center">
           <Link href="/integrations" legacyBehavior>
-            <a className="inline-flex items-center justify-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors">
               API
             </a>
           </Link>
@@ -457,40 +496,42 @@ export default function PostsClient({ initialPosts }: Props) {
             <>
               <button
                 onClick={() => setShowOnlyMine(!showOnlyMine)}
-                className={`px-4 py-2 rounded border border-gray-300 text-sm font-medium transition-colors disabled:opacity-50 ${
+                title={showOnlyMine ? "Show all posts" : "Show only my posts"}
+                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${
                   showOnlyMine
-                    ? "bg-yellow-400 border-yellow-500 text-yellow-900 hover:bg-yellow-300"
-                    : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"
+                    ? "bg-yellow-100 border-yellow-400 text-yellow-800 hover:bg-yellow-200"
+                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100"
                 }`}
               >
-                {showOnlyMine ? "Show All Posts" : "Show Only My Posts"}
+                {showOnlyMine ? "My Posts ✓" : "My Posts"}
               </button>
               <Link href="/quiz" legacyBehavior>
-                <a className="inline-flex items-center justify-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors">
                   Quiz
                 </a>
               </Link>
               <Link href="/settings" legacyBehavior>
-                <a className="inline-flex items-center justify-center px-4 py-2 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors">
                   Settings
                 </a>
               </Link>
               <Link href="/posts/new" legacyBehavior>
-                <a className="inline-flex items-center justify-center px-4 py-2 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors">
                   + New Post
                 </a>
               </Link>
               <button
                 onClick={handleLogout}
-                className="inline-flex items-center justify-center px-4 py-2 rounded border border-red-600 bg-red-500 text-white hover:bg-red-600 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                title={`Logout ${session?.user?.email ?? ''}`}
+                className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-red-600 hover:border-red-300 text-sm font-medium transition-colors"
               >
-                Logout {session?.user?.email ? `(${session.user.email.split("@")[0]})` : ""}
+                Logout
               </button>
             </>
           )}
           {!session && (
             <Link href="/login" legacyBehavior>
-              <a className="inline-flex items-center justify-center px-4 py-2 rounded border border-blue-600 bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-blue-600 bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium transition-colors">
                 Login / Sign Up
               </a>
             </Link>
@@ -525,7 +566,7 @@ export default function PostsClient({ initialPosts }: Props) {
                               : "text-gray-700"
                           }`}
                         >
-                          {showOnlyMine ? "Show All Posts" : "Show Only My Posts"}
+                          {showOnlyMine ? "My Posts ✓" : "My Posts"}
                         </button>
                       )}
                     </Menu.Item>

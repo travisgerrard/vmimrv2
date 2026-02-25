@@ -30,6 +30,17 @@ type Props = {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function startViewTransition(callback: () => void) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((document as any).startViewTransition) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (document as any).startViewTransition(callback);
+  } else {
+    callback();
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const markdownComponents = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   a: (
@@ -410,7 +421,11 @@ export default function PostsClient({ initialPosts }: Props) {
                 tabIndex={0}
                 role="button"
                 aria-label="Open post"
-                style={{ textDecoration: "none" }}
+                style={{ textDecoration: "none", ...({ viewTransitionName: `post-${post.id}` } as React.CSSProperties) }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  startViewTransition(() => router.push(`/posts/${post.id}`));
+                }}
               >
                 <div className="text-xs text-gray-400 flex items-center gap-2 mb-2">
                   {post.hasPdf && <span title="Contains PDF">📄</span>}

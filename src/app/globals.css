@@ -2,4 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Add any custom global styles below if needed */
+/* ── View Transitions ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  /* Background page fade — quick, so focus stays on the expanding card */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 200ms;
+    animation-timing-function: ease-in-out;
+  }
+
+  /* Shared card ↔ article morph — slightly longer for a satisfying expand */
+  ::view-transition-group(*) {
+    animation-duration: 350ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  ::view-transition-image-pair(*) {
+    isolation: auto;
+  }
+
+  /* Fade out the old card content as it expands */
+  ::view-transition-old(*) {
+    animation-duration: 150ms;
+    animation-timing-function: ease-in;
+  }
+
+  /* Fade in the new article content after it arrives */
+  ::view-transition-new(*) {
+    animation-duration: 250ms;
+    animation-timing-function: ease-out;
+    animation-delay: 100ms;
+  }
+}

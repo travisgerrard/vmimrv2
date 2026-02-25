@@ -467,6 +467,17 @@ export default function PostDetailPage() {
           <a
             className="text-blue-600 hover:underline text-sm"
             onPointerDown={() => sessionStorage.setItem('postsScroll', window.scrollY.toString())}
+            onClick={(e) => {
+              e.preventDefault();
+              sessionStorage.setItem('postsScroll', window.scrollY.toString());
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((document as any).startViewTransition) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (document as any).startViewTransition(() => router.push('/'));
+              } else {
+                router.push('/');
+              }
+            }}
           >
             &larr; Back to Posts
           </a>
@@ -545,7 +556,10 @@ export default function PostDetailPage() {
 
       {error && <p className="text-red-600 text-sm mb-4">Note: {error}</p>}
 
-      <article className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6">
+      <article
+        className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6"
+        style={{ ...({ viewTransitionName: `post-${postId}` } as React.CSSProperties) }}
+      >
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
       </article>
 

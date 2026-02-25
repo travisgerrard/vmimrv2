@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
@@ -93,7 +93,14 @@ function PostsSkeleton() {
 
 export default function PostsClient({ initialPosts }: Props) {
   const [session, setSession] = useState<Session | null>(null);
-  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [posts, setPosts] = useState<Post[]>(() => {
+    if (typeof window === 'undefined') return initialPosts;
+    try {
+      const cached = sessionStorage.getItem('postsCache');
+      if (cached) return JSON.parse(cached) as Post[];
+    } catch { /* ignore */ }
+    return initialPosts;
+  });
   const [showOnlyMine, setShowOnlyMine] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -102,7 +109,9 @@ export default function PostsClient({ initialPosts }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [signedThumbnailUrls, setSignedThumbnailUrls] = useState<Record<string, string | null>>({});
   const postsContainerRef = useRef<HTMLDivElement | null>(null);
-  const firstFetchComplete = useRef(false);
+  const firstFetchComplete = useRef<boolean>(
+    typeof window !== 'undefined' && !!sessionStorage.getItem('postsCache')
+  );
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -258,19 +267,20 @@ export default function PostsClient({ initialPosts }: Props) {
     fetchAllSignedUrls();
   }, [posts]);
 
-  // Hydrate posts from sessionStorage cache on mount (client only)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const cached = sessionStorage.getItem('postsCache');
-      if (cached) {
-        try {
-          setPosts(JSON.parse(cached) as Post[]);
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }, []);
+  // After posts render, restore view-transition-name on the last-viewed card for back animation
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined' || posts.length === 0) return;
+    const lastId = sessionStorage.getItem('lastViewedPostId');
+    if (!lastId) return;
+    const card = document.querySelector<HTMLElement>(`[data-post-id="${lastId}"]`);
+    if (!card) return;
+    card.style.setProperty('view-transition-name', 'active-card');
+    const timer = setTimeout(() => {
+      card.style.removeProperty('view-transition-name');
+      sessionStorage.removeItem('lastViewedPostId');
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [posts]);
 
   // Restore scroll position robustly: wait until posts are rendered in the DOM
   useEffect(() => {
@@ -421,9 +431,12 @@ export default function PostsClient({ initialPosts }: Props) {
                 tabIndex={0}
                 role="button"
                 aria-label="Open post"
-                style={{ textDecoration: "none", ...({ viewTransitionName: `post-${post.id}` } as React.CSSProperties) }}
+                data-post-id={post.id}
+                style={{ textDecoration: "none" }}
                 onClick={(e) => {
                   e.preventDefault();
+                  (e.currentTarget as HTMLElement).style.setProperty('view-transition-name', 'active-card');
+                  sessionStorage.setItem('lastViewedPostId', post.id);
                   startViewTransition(() => router.push(`/posts/${post.id}`));
                 }}
               >

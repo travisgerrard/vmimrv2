@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient'; // Correct relative path
@@ -62,6 +62,13 @@ export default function PostDetailPage() {
   const params = useParams();
   const router = useRouter();
   const postId = params?.id as string;
+  const articleRef = useRef<HTMLElement | null>(null);
+
+  // Set view-transition-name via DOM API (works in Safari; React inline style doesn't)
+  useLayoutEffect(() => {
+    if (!articleRef.current || !post) return;
+    articleRef.current.style.setProperty('view-transition-name', 'active-card');
+  }, [post]);
 
   useEffect(() => {
     const checkSessionAndFetch = async () => {
@@ -557,8 +564,8 @@ export default function PostDetailPage() {
       {error && <p className="text-red-600 text-sm mb-4">Note: {error}</p>}
 
       <article
+        ref={articleRef}
         className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6"
-        style={{ ...({ viewTransitionName: `post-${postId}` } as React.CSSProperties) }}
       >
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
       </article>

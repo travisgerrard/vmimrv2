@@ -527,9 +527,19 @@ export default function PostDetailPage() {
 
        {error && <p className="text-red-600 text-sm mb-4">Note: {error}</p>}
 
-      <article className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6">
+      <article className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-3">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
       </article>
+
+      {post.tags && post.tags.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {post.tags.map(tag => (
+            <span key={tag} className="inline-block bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-sm font-medium text-blue-700">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
 
        {/* --- Summary Section Moved Here (Handles Pending/Error/Success) --- */}
        <div className="mt-4 mb-6"> {/* Added mb-6 */}
@@ -619,13 +629,6 @@ export default function PostDetailPage() {
       <div className="mt-8 text-sm text-gray-500 border-t border-gray-200 pt-4">
         <p>Created: {new Date(post.created_at).toLocaleString()}</p>
         <p>Last Updated: {new Date(post.updated_at).toLocaleString()}</p>
-        {post.tags && post.tags.length > 0 && (
-            <div className="mt-2">
-                Tags: {post.tags.map(tag => (
-                    <span key={tag} className="ml-1 inline-block bg-gray-100 rounded-full px-2 py-0.5 text-xs font-semibold text-gray-600">@{tag}</span>
-                ))}
-            </div>
-        )}
       </div>
     </div>
   );

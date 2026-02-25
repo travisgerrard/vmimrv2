@@ -18,6 +18,70 @@ async function getAuthenticatedUser(req: NextRequest) {
   return { user, token };
 }
 
+// GET /api/posts/[id] — fetch a single post
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { user, token } = await getAuthenticatedUser(req);
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const supabase = getUserClient(token!);
+
+  const { data: post, error } = await supabase
+    .from('posts')
+    .select('id, created_at, updated_at, content, tags, is_starred')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .single();
+
+  if (error || !post) {
+    return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+  }
+
+  return NextResponse.json(post);
+}
+
+// PATCH /api/posts/[id] — update content and/or tags
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { user, token } = await getAuthenticatedUser(req);
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const body = await req.json();
+  const updates: Record<string, unknown> = {};
+  if (typeof body.content === 'string') updates.content = body.content.trim();
+  if (Array.isArray(body.tags)) updates.tags = body.tags;
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'No updatable fields provided' }, { status: 400 });
+  }
+
+  const supabase = getUserClient(token!);
+
+  const { data: post, error } = await supabase
+    .from('posts')
+    .update(updates)
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select('id, created_at, content, tags')
+    .single();
+
+  if (error || !post) {
+    return NextResponse.json({ error: error?.message ?? 'Post not found' }, { status: 404 });
+  }
+
+  return NextResponse.json(post);
+}
+
 // DELETE /api/posts/[id] — delete a post and its media files
 export async function DELETE(
   req: NextRequest,

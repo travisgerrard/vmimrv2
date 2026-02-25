@@ -2,31 +2,62 @@
 /**
  * medical-notes CLI
  *
- * Env vars (set in shell profile or agent environment):
- *   MEDICAL_NOTES_URL       Base URL of the running app (default: http://localhost:3000)
- *   MEDICAL_NOTES_EMAIL     Supabase account email
- *   MEDICAL_NOTES_PASSWORD  Supabase account password
+ * Credentials (in priority order):
+ *   1. Environment variables
+ *   2. ~/.medical-notes.json  ← create with: chmod 600 ~/.medical-notes.json
+ *
+ * Config file format:
+ *   { "email": "you@example.com", "password": "...", "url": "https://www.vmimr.com" }
  *
  * Usage:
  *   node cli/medical-notes.mjs add "content here" [--tags tag1,tag2]
- *   echo "content" | node cli/medical-notes.mjs add [--tags tag1,tag2]
  *   node cli/medical-notes.mjs add --file ./note.md [--tags tag1,tag2]
- *   node cli/medical-notes.mjs list [--limit 20] [--tag cardiology] [--search "query"]
+ *   echo "content" | node cli/medical-notes.mjs add [--tags tag1,tag2]
+ *   node cli/medical-notes.mjs list [--limit 20] [--tag cardiology]
  *   node cli/medical-notes.mjs search "query" [--limit 20]
+ *   node cli/medical-notes.mjs show <post-id>
+ *   node cli/medical-notes.mjs edit <post-id>
+ *   node cli/medical-notes.mjs delete <post-id> [--force]
+ *
+ * Via npm run (use -- to prevent npm from stripping flags):
+ *   npm run cli -- add --file ./note.md --tags cardiology
  */
 
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
+import { resolve, join } from 'path';
+import { homedir, tmpdir } from 'os';
 import { createInterface } from 'readline';
+import { spawnSync } from 'child_process';
 
-const BASE_URL = (process.env.MEDICAL_NOTES_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-const EMAIL = process.env.MEDICAL_NOTES_EMAIL;
-const PASSWORD = process.env.MEDICAL_NOTES_PASSWORD;
+// ── config ────────────────────────────────────────────────────────────────────
+
+function loadConfig() {
+  const cfgPath = join(homedir(), '.medical-notes.json');
+  if (existsSync(cfgPath)) {
+    try {
+      return JSON.parse(readFileSync(cfgPath, 'utf-8'));
+    } catch {
+      console.error('Warning: ~/.medical-notes.json is malformed, ignoring.');
+    }
+  }
+  return {};
+}
+
+const cfg = loadConfig();
+const BASE_URL = (process.env.MEDICAL_NOTES_URL ?? cfg.url ?? 'http://localhost:3000').replace(/\/$/, '');
+const EMAIL = process.env.MEDICAL_NOTES_EMAIL ?? cfg.email;
+const PASSWORD = process.env.MEDICAL_NOTES_PASSWORD ?? cfg.password;
 
 if (!EMAIL || !PASSWORD) {
-  console.error('Error: MEDICAL_NOTES_EMAIL and MEDICAL_NOTES_PASSWORD must be set.');
-  console.error('  export MEDICAL_NOTES_EMAIL="you@example.com"');
-  console.error('  export MEDICAL_NOTES_PASSWORD="yourpassword"');
+  console.error('Error: credentials not found. Set env vars or create ~/.medical-notes.json');
+  console.error('');
+  console.error('  Option 1 — env vars:');
+  console.error('    export MEDICAL_NOTES_EMAIL="you@example.com"');
+  console.error('    export MEDICAL_NOTES_PASSWORD="yourpassword"');
+  console.error('');
+  console.error('  Option 2 — config file (~/.medical-notes.json):');
+  console.error('    { "email": "you@example.com", "password": "...", "url": "https://www.vmimr.com" }');
+  console.error('    chmod 600 ~/.medical-notes.json');
   process.exit(1);
 }
 
@@ -52,13 +83,31 @@ function parseArgs(argv) {
   const result = { positional: [], flags: {} };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith('--')) {
-      const key = argv[i].slice(2);
-      result.flags[key] = argv[i + 1] ?? true;
-      i++;
+      const arg = argv[i].slice(2);
+      if (arg.includes('=')) {
+        const eqIdx = arg.indexOf('=');
+        result.flags[arg.slice(0, eqIdx)] = arg.slice(eqIdx + 1);
+      } else {
+        result.flags[arg] = argv[i + 1] ?? true;
+        i++;
+      }
     } else {
       result.positional.push(argv[i]);
     }
   }
+
+  // `npm run` (without --) strips --flag names, sets npm_config_<flag>=true,
+  // and passes the values as positional args. Reconstruct from npm_config_* hints.
+  const remaining = [...result.positional];
+  for (const key of ['file', 'tags', 'tag', 'limit', 'search']) {
+    const envVal = process.env[`npm_config_${key}`];
+    if (!result.flags[key] && (envVal === 'true' || envVal === '') && remaining.length) {
+      result.flags[key] = remaining.shift();
+    }
+  }
+  // Replace positional with the unconsumed remainder
+  result.positional = remaining;
+
   return result;
 }
 
@@ -90,9 +139,16 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function truncate(text, len = 120) {
-  const flat = text.replace(/\n+/g, ' ').trim();
-  return flat.length > len ? flat.slice(0, len) + '…' : flat;
+function previewContent(text, lines = 4) {
+  return text.trim().split('\n').slice(0, lines).join('\n');
+}
+
+function printPostSummary(post) {
+  const tags = post.tags?.length ? `  [${post.tags.join(', ')}]` : '';
+  const star = post.is_starred ? ' ★' : '';
+  console.log(`${formatDate(post.created_at)}${star}  ${post.id.slice(0, 8)}${tags}`);
+  console.log(previewContent(post.content).split('\n').map(l => `  ${l}`).join('\n'));
+  console.log();
 }
 
 // ── commands ──────────────────────────────────────────────────────────────────
@@ -125,6 +181,76 @@ async function cmdAdd(token, args) {
   console.log(`  URL  : ${BASE_URL}/posts/${post.id}`);
 }
 
+async function cmdShow(token, args) {
+  const { positional } = parseArgs(args);
+  const id = positional[0];
+
+  if (!id) {
+    console.error('Error: post ID required.  Usage: show <post-id>');
+    process.exit(1);
+  }
+
+  const post = await apiFetch(token, `/api/posts/${id}`);
+
+  const tags = post.tags?.length ? post.tags.join(', ') : '(none)';
+  const star = post.is_starred ? ' ★' : '';
+  console.log(`${'─'.repeat(60)}`);
+  console.log(`${formatDate(post.created_at)}${star}  ${post.id}`);
+  console.log(`Tags: ${tags}`);
+  console.log(`${'─'.repeat(60)}`);
+  console.log(post.content);
+  console.log(`${'─'.repeat(60)}`);
+  console.log(`URL: ${BASE_URL}/posts/${post.id}`);
+}
+
+async function cmdEdit(token, args) {
+  const { positional, flags } = parseArgs(args);
+  const id = positional[0];
+
+  if (!id) {
+    console.error('Error: post ID required.  Usage: edit <post-id>');
+    process.exit(1);
+  }
+
+  const post = await apiFetch(token, `/api/posts/${id}`);
+
+  // Write current content to a temp file
+  const tmpFile = join(tmpdir(), `medical-note-${id.slice(0, 8)}.md`);
+  writeFileSync(tmpFile, post.content, 'utf-8');
+
+  const editor = process.env.VISUAL ?? process.env.EDITOR ?? 'vi';
+  const result = spawnSync(editor, [tmpFile], { stdio: 'inherit' });
+
+  if (result.error) {
+    console.error(`Failed to open editor "${editor}": ${result.error.message}`);
+    unlinkSync(tmpFile);
+    process.exit(1);
+  }
+
+  const newContent = readFileSync(tmpFile, 'utf-8');
+  unlinkSync(tmpFile);
+
+  if (newContent.trim() === post.content.trim()) {
+    console.log('No changes detected.');
+    return;
+  }
+
+  // Handle optional --tags flag to update tags as well
+  const updates = { content: newContent };
+  if (flags.tags) {
+    updates.tags = String(flags.tags).split(',').map(t => t.trim()).filter(Boolean);
+  }
+
+  const updated = await apiFetch(token, `/api/posts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+
+  console.log(`Updated: ${updated.id}`);
+  console.log(`  Tags : ${updated.tags?.length ? updated.tags.join(', ') : '(none)'}`);
+  console.log(`  URL  : ${BASE_URL}/posts/${updated.id}`);
+}
+
 async function cmdList(token, args) {
   const { positional, flags } = parseArgs(args);
 
@@ -142,11 +268,7 @@ async function cmdList(token, args) {
   }
 
   for (const post of posts) {
-    const tags = post.tags?.length ? ` [${post.tags.join(', ')}]` : '';
-    const star = post.is_starred ? ' ★' : '';
-    console.log(`${formatDate(post.created_at)}${star}  ${post.id.slice(0, 8)}${tags}`);
-    console.log(`  ${truncate(post.content)}`);
-    console.log();
+    printPostSummary(post);
   }
   console.log(`${posts.length} post${posts.length === 1 ? '' : 's'}`);
 }
@@ -160,7 +282,6 @@ async function cmdDelete(token, args) {
     process.exit(1);
   }
 
-  // Confirm unless --force is passed
   if (!flags.force) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise(resolve => rl.question(`Delete post ${id}? (y/N) `, resolve));
@@ -186,14 +307,20 @@ Commands:
   add "content" [--tags tag1,tag2]     Create a post from inline text
   add --file ./note.md [--tags ...]    Create a post from a file
   echo "text" | add [--tags ...]       Create a post from stdin
-  list [--limit 20] [--tag x]          List recent posts
+  show <post-id>                       Print full post content
+  edit <post-id> [--tags tag1,tag2]    Open post in $EDITOR and save changes
+  list [--limit 20] [--tag x]          List recent posts (shows first 4 lines)
   search "query" [--limit 20]          Full-text search posts
   delete <post-id> [--force]           Delete a post (--force skips confirmation)
 
-Env vars required:
-  MEDICAL_NOTES_EMAIL      Your account email
-  MEDICAL_NOTES_PASSWORD   Your account password
-  MEDICAL_NOTES_URL        App URL (default: http://localhost:3000)
+Credentials (first match wins):
+  1. Env vars: MEDICAL_NOTES_EMAIL, MEDICAL_NOTES_PASSWORD, MEDICAL_NOTES_URL
+  2. Config file: ~/.medical-notes.json
+     { "email": "...", "password": "...", "url": "https://www.vmimr.com" }
+     chmod 600 ~/.medical-notes.json
+
+Tip: when using npm run, add -- to pass flags correctly:
+  npm run cli -- add --file ./note.md --tags cardiology
 `.trim();
 
 if (!command || command === '--help' || command === 'help') {
@@ -205,6 +332,8 @@ const token = await signIn();
 
 switch (command) {
   case 'add':    await cmdAdd(token, rest); break;
+  case 'show':   await cmdShow(token, rest); break;
+  case 'edit':   await cmdEdit(token, rest); break;
   case 'list':   await cmdList(token, rest); break;
   case 'search': await cmdList(token, rest); break;
   case 'delete': await cmdDelete(token, rest); break;

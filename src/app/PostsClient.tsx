@@ -39,11 +39,14 @@ const markdownComponents = {
   ) as React.ComponentType<any>
 };
 
-// Strip markdown image syntax for card previews, return text and whether images were present
-function stripMarkdownImages(content: string): { text: string; hasInlineImages: boolean } {
-  const hasInlineImages = /!\[.*?\]\(.*?\)/.test(content);
-  const text = content.replace(/!\[.*?\]\(.*?\)/g, '').replace(/\n{3,}/g, '\n\n').trim();
-  return { text, hasInlineImages };
+// Strip markdown image syntax for card previews, return text and extracted image URLs
+function stripMarkdownImages(content: string): { text: string; inlineImageUrls: string[] } {
+  const inlineImageUrls: string[] = [];
+  const text = content
+    .replace(/!\[.*?\]\((.*?)\)/g, (_match, url) => { inlineImageUrls.push(url); return ''; })
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return { text, inlineImageUrls };
 }
 
 function formatCardDate(iso: string): string {
@@ -414,7 +417,7 @@ export default function PostsClient({ initialPosts }: Props) {
                   <span>{formatCardDate(post.created_at)}</span>
                 </div>
                 {(() => {
-                  const { text, hasInlineImages } = stripMarkdownImages(post.content);
+                  const { text, inlineImageUrls } = stripMarkdownImages(post.content);
                   const preview = text.substring(0, 200) + (text.length > 200 ? "…" : "");
                   return (
                     <>
@@ -423,8 +426,15 @@ export default function PostsClient({ initialPosts }: Props) {
                           {preview}
                         </ReactMarkdown>
                       </div>
-                      {hasInlineImages && (
-                        <span className="inline-block mt-1 text-xs text-gray-400">🖼 contains image</span>
+                      {inlineImageUrls.length > 0 && (
+                        <div className="mt-3 grid grid-cols-4 gap-2">
+                          {inlineImageUrls.slice(0, 4).map((url, i) => (
+                            <div key={i} className="w-full h-20 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </>
                   );

@@ -456,16 +456,17 @@ export default function PostsClient({ initialPosts }: Props) {
                     return;
                   }
 
-                  // Start the view transition. The callback waits for the detail page to
-                  // mount and call __vtResolve, at which point the browser captures the
-                  // new state (article with view-transition-name) and plays the morph.
+                  // IMPORTANT: set __vtResolve on window BEFORE calling startViewTransition.
+                  // In Safari the callback is scheduled on a later rAF (not a microtask),
+                  // so the new page's useLayoutEffect can fire before the callback runs.
+                  // Setting it first eliminates that race condition.
+                  let vtResolve!: () => void;
+                  const vtPromise = new Promise<void>(r => { vtResolve = r; });
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (document as any).startViewTransition(async () => {
-                    await new Promise<void>(resolve => {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      (window as any).__vtResolve = resolve;
-                    });
-                  });
+                  (window as any).__vtResolve = vtResolve;
+
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (document as any).startViewTransition(async () => { await vtPromise; });
                   router.push(`/posts/${post.id}`);
                 }}
               >

@@ -501,16 +501,14 @@ export default function PostDetailPage() {
                 router.push('/');
                 return;
               }
-              // Start the back transition. PostsClient's useLayoutEffect will find the
-              // last-viewed card, restore scroll, set its view-transition-name, then
-              // call __vtResolve so the browser captures the correct new state.
+              // Set __vtResolve BEFORE startViewTransition to avoid the Safari race
+              // condition where useLayoutEffect on the list fires before the callback.
+              let vtResolve!: () => void;
+              const vtPromise = new Promise<void>(r => { vtResolve = r; });
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (document as any).startViewTransition(async () => {
-                await new Promise<void>(resolve => {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (window as any).__vtResolve = resolve;
-                });
-              });
+              (window as any).__vtResolve = vtResolve;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (document as any).startViewTransition(async () => { await vtPromise; });
               router.push('/');
             }}
           >

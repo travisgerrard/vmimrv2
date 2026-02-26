@@ -81,13 +81,14 @@ export default function PostDetailPage() {
   const postId = params?.id as string;
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // FLIP animation: when arriving from a card click, animate the article from the
-  // card's position/size to its natural position (grow effect, no screen freeze).
+  // Card-expand animation: translate article to card's position and clip it to the
+  // card's dimensions, then animate to natural size. No content squish — the article
+  // is always full-size, we just reveal it from the card's rect outward.
   useLayoutEffect(() => {
     if (!articleRef.current || !post) return;
     const rectStr = sessionStorage.getItem('cardRect');
     if (!rectStr) return;
-    // Keep cardRect for the back animation — don't remove it yet
+    // Keep cardRect; the back-navigation handler will remove it
 
     const { top, left, width, height } = JSON.parse(rectStr) as
       { top: number; left: number; width: number; height: number; scrollY: number };
@@ -95,27 +96,35 @@ export default function PostDetailPage() {
     const ar = article.getBoundingClientRect();
     if (ar.width === 0) return;
 
+    // How far the article needs to shift to align its top-left with the card's top-left
     const dx = left - ar.left;
     const dy = top - ar.top;
-    const sx = width / ar.width;
-    const sy = height / ar.height;
+    // How much to clip off the right/bottom so only card-sized content shows initially
+    const clipR = Math.max(0, ar.width  - width);
+    const clipB = Math.max(0, ar.height - height);
 
-    // Teleport article to card position/size (no transition)
+    // Start: article translated to card position, clipped to card size
     article.style.transformOrigin = 'top left';
-    article.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
-    article.style.transition = 'none';
+    article.style.transform   = `translate(${dx}px, ${dy}px)`;
+    article.style.clipPath    = `inset(0 ${clipR}px ${clipB}px 0 round 8px)`;
+    article.style.transition  = 'none';
 
-    // Force layout flush so the browser registers the starting position
+    // Force layout flush so browser records the starting state
     article.getBoundingClientRect();
 
-    // Animate to natural position
-    article.style.transition = 'transform 220ms cubic-bezier(0.2, 0, 0, 1)';
-    article.style.transform = '';
+    // Animate to natural position + full reveal
+    const d = 280;
+    const e = 'cubic-bezier(0.4, 0, 0.2, 1)';
+    article.style.transition  = `transform ${d}ms ${e}, clip-path ${d}ms ${e}`;
+    article.style.transform   = '';
+    article.style.clipPath    = 'inset(0 0 0 0 round 4px)';
 
     const tid = setTimeout(() => {
       article.style.transformOrigin = '';
-      article.style.transition = '';
-    }, 270);
+      article.style.transition      = '';
+      article.style.transform       = '';
+      article.style.clipPath        = '';
+    }, d + 60);
     return () => clearTimeout(tid);
   }, [post]);
 
@@ -524,22 +533,33 @@ export default function PostDetailPage() {
             className="text-blue-600 hover:underline text-sm"
             onClick={(e) => {
               e.preventDefault();
-              // Restore the list's scroll position (saved when the card was clicked)
               const rectStr = sessionStorage.getItem('cardRect');
               if (rectStr) {
                 const { scrollY } = JSON.parse(rectStr) as { scrollY: number };
                 sessionStorage.setItem('postsScroll', String(scrollY));
-                sessionStorage.removeItem('cardRect');
               }
-              // Shrink the article back toward the card, then navigate
-              if (articleRef.current) {
-                const article = articleRef.current;
-                article.style.transformOrigin = 'top center';
-                article.style.transition = 'transform 160ms cubic-bezier(0.4, 0, 1, 1), opacity 160ms ease-in';
-                article.style.transform = 'scale(0.94) translateY(8px)';
-                article.style.opacity = '0';
-                setTimeout(() => router.push('/'), 155);
+
+              const article = articleRef.current;
+              if (article && rectStr) {
+                const { top, left, width, height } = JSON.parse(rectStr) as
+                  { top: number; left: number; width: number; height: number };
+                const ar = article.getBoundingClientRect();
+                const dx     = left - ar.left;
+                const dy     = top  - ar.top;
+                const clipR  = Math.max(0, ar.width  - width);
+                const clipB  = Math.max(0, ar.height - height);
+
+                const d = 240;
+                const ease = 'cubic-bezier(0.4, 0, 1, 1)';
+                article.style.transformOrigin = 'top left';
+                article.style.transition = `transform ${d}ms ${ease}, clip-path ${d}ms ${ease}`;
+                article.style.transform  = `translate(${dx}px, ${dy}px)`;
+                article.style.clipPath   = `inset(0 ${clipR}px ${clipB}px 0 round 8px)`;
+
+                sessionStorage.removeItem('cardRect');
+                setTimeout(() => router.push('/'), d - 20);
               } else {
+                sessionStorage.removeItem('cardRect');
                 router.push('/');
               }
             }}

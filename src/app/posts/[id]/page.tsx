@@ -512,7 +512,7 @@ export default function PostDetailPage() {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (document as any).startViewTransition(async () => {
                   router.push('/');
-                  await Promise.race([readyPromise, new Promise<void>(r => setTimeout(r, 1500))]);
+                  await Promise.race([readyPromise, new Promise<void>(r => setTimeout(r, 500))]);
                 });
               } else {
                 router.push('/');

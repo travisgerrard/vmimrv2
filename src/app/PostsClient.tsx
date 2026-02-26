@@ -45,8 +45,8 @@ function vtNavigate(navigate: () => void) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (document as any).startViewTransition(async () => {
     navigate();
-    // Wait for destination to call window.__vtResolve(), or fall back after 1.5s
-    await Promise.race([readyPromise, new Promise<void>(r => setTimeout(r, 1500))]);
+    // Wait for destination to call window.__vtResolve(), or fall back after 500ms
+    await Promise.race([readyPromise, new Promise<void>(r => setTimeout(r, 500))]);
   });
 }
 

@@ -29,15 +29,25 @@ type Props = {
   initialPosts: Post[];
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function startViewTransition(callback: () => void) {
+// Start a view transition that waits for the destination page to signal ready
+// before the browser captures the new state. This enables true shared-element
+// morphing even though Next.js router.push() is asynchronous.
+function vtNavigate(navigate: () => void) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if ((document as any).startViewTransition) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (document as any).startViewTransition(callback);
-  } else {
-    callback();
+  if (!(document as any).startViewTransition) {
+    navigate();
+    return;
   }
+  let resolveReady!: () => void;
+  const readyPromise = new Promise<void>(r => { resolveReady = r; });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).__vtResolve = resolveReady;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (document as any).startViewTransition(async () => {
+    navigate();
+    // Wait for destination to call window.__vtResolve(), or fall back after 1.5s
+    await Promise.race([readyPromise, new Promise<void>(r => setTimeout(r, 1500))]);
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -275,6 +285,14 @@ export default function PostsClient({ initialPosts }: Props) {
     const card = document.querySelector<HTMLElement>(`[data-post-id="${lastId}"]`);
     if (!card) return;
     card.style.setProperty('view-transition-name', 'active-card');
+    // Signal the waiting view transition that the destination (card) is ready
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).__vtResolve) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).__vtResolve();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).__vtResolve;
+    }
     const timer = setTimeout(() => {
       card.style.removeProperty('view-transition-name');
       sessionStorage.removeItem('lastViewedPostId');
@@ -437,7 +455,9 @@ export default function PostsClient({ initialPosts }: Props) {
                   e.preventDefault();
                   (e.currentTarget as HTMLElement).style.setProperty('view-transition-name', 'active-card');
                   sessionStorage.setItem('lastViewedPostId', post.id);
-                  startViewTransition(() => router.push(`/posts/${post.id}`));
+                  // Pre-populate detail page so it can render instantly (needed for the morph)
+                  sessionStorage.setItem('pendingPost', JSON.stringify(post));
+                  vtNavigate(() => router.push(`/posts/${post.id}`));
                 }}
               >
                 <div className="text-xs text-gray-400 flex items-center gap-2 mb-2">

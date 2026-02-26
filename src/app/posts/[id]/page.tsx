@@ -41,7 +41,24 @@ type PatientSummary = {
 };
 
 export default function PostDetailPage() {
-  const [post, setPost] = useState<Post | null>(null);
+  // Pre-populate from sessionStorage so the article renders instantly on card click
+  // (the view transition captures the article before the async Supabase fetch completes)
+  const [post, setPost] = useState<Post | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const pending = sessionStorage.getItem('pendingPost');
+    if (!pending) return null;
+    try {
+      const p = JSON.parse(pending);
+      // Validate the ID matches the current URL to avoid stale data
+      const urlPostId = window.location.pathname.split('/').filter(Boolean).pop();
+      if (p.id !== urlPostId) return null;
+      sessionStorage.removeItem('pendingPost');
+      // Provide updated_at fallback (not in list data) so the Post type is satisfied
+      return { updated_at: p.created_at, ...p } as Post;
+    } catch {
+      return null;
+    }
+  });
   const [session, setSession] = useState<Session | null>(null); // Add session state
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isStarred, setIsStarred] = useState(false);
@@ -65,9 +82,18 @@ export default function PostDetailPage() {
   const articleRef = useRef<HTMLElement | null>(null);
 
   // Set view-transition-name via DOM API (works in Safari; React inline style doesn't)
+  // Then signal the waiting view transition that the article is ready to be captured
   useLayoutEffect(() => {
     if (!articleRef.current || !post) return;
     articleRef.current.style.setProperty('view-transition-name', 'active-card');
+    // Signal the waiting vtNavigate() call that the destination is ready
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).__vtResolve) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).__vtResolve();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).__vtResolve;
+    }
   }, [post]);
 
   useEffect(() => {
@@ -442,7 +468,7 @@ export default function PostDetailPage() {
     }
   }, [post]);
 
-  if (loading) {
+  if (loading && !post) {
     return <div className="p-8 text-center">Loading post details...</div>;
   }
   if (error && !post) {
@@ -479,8 +505,15 @@ export default function PostDetailPage() {
               sessionStorage.setItem('postsScroll', window.scrollY.toString());
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               if ((document as any).startViewTransition) {
+                let resolveReady!: () => void;
+                const readyPromise = new Promise<void>(r => { resolveReady = r; });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (document as any).startViewTransition(() => router.push('/'));
+                (window as any).__vtResolve = resolveReady;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (document as any).startViewTransition(async () => {
+                  router.push('/');
+                  await Promise.race([readyPromise, new Promise<void>(r => setTimeout(r, 1500))]);
+                });
               } else {
                 router.push('/');
               }

@@ -84,6 +84,8 @@ export default function PostDetailPage() {
   // Card-expand animation: translate article to card's position and clip it to the
   // card's dimensions, then animate to natural size. No content squish — the article
   // is always full-size, we just reveal it from the card's rect outward.
+  // Body background is temporarily set to white so the bg-gray-100 body doesn't
+  // show through around the clipped/translated article.
   useLayoutEffect(() => {
     if (!articleRef.current || !post) return;
     const rectStr = sessionStorage.getItem('cardRect');
@@ -96,36 +98,38 @@ export default function PostDetailPage() {
     const ar = article.getBoundingClientRect();
     if (ar.width === 0) return;
 
-    // How far the article needs to shift to align its top-left with the card's top-left
-    const dx = left - ar.left;
-    const dy = top - ar.top;
-    // How much to clip off the right/bottom so only card-sized content shows initially
+    const dx    = left - ar.left;
+    const dy    = top  - ar.top;
     const clipR = Math.max(0, ar.width  - width);
     const clipB = Math.max(0, ar.height - height);
 
-    // Start: article translated to card position, clipped to card size
+    // Hide the grey body background for the duration of the animation
+    document.body.style.backgroundColor = '#ffffff';
+
     article.style.transformOrigin = 'top left';
     article.style.transform   = `translate(${dx}px, ${dy}px)`;
     article.style.clipPath    = `inset(0 ${clipR}px ${clipB}px 0 round 8px)`;
     article.style.transition  = 'none';
 
-    // Force layout flush so browser records the starting state
-    article.getBoundingClientRect();
+    article.getBoundingClientRect(); // flush
 
-    // Animate to natural position + full reveal
     const d = 280;
     const e = 'cubic-bezier(0.4, 0, 0.2, 1)';
-    article.style.transition  = `transform ${d}ms ${e}, clip-path ${d}ms ${e}`;
-    article.style.transform   = '';
-    article.style.clipPath    = 'inset(0 0 0 0 round 4px)';
+    article.style.transition = `transform ${d}ms ${e}, clip-path ${d}ms ${e}`;
+    article.style.transform  = '';
+    article.style.clipPath   = 'inset(0 0 0 0 round 4px)';
 
     const tid = setTimeout(() => {
-      article.style.transformOrigin = '';
-      article.style.transition      = '';
-      article.style.transform       = '';
-      article.style.clipPath        = '';
+      article.style.transformOrigin    = '';
+      article.style.transition         = '';
+      article.style.transform          = '';
+      article.style.clipPath           = '';
+      document.body.style.backgroundColor = '';
     }, d + 60);
-    return () => clearTimeout(tid);
+    return () => {
+      clearTimeout(tid);
+      document.body.style.backgroundColor = '';
+    };
   }, [post]);
 
   useEffect(() => {
@@ -544,10 +548,13 @@ export default function PostDetailPage() {
                 const { top, left, width, height } = JSON.parse(rectStr) as
                   { top: number; left: number; width: number; height: number };
                 const ar = article.getBoundingClientRect();
-                const dx     = left - ar.left;
-                const dy     = top  - ar.top;
-                const clipR  = Math.max(0, ar.width  - width);
-                const clipB  = Math.max(0, ar.height - height);
+                const dx    = left - ar.left;
+                const dy    = top  - ar.top;
+                const clipR = Math.max(0, ar.width  - width);
+                const clipB = Math.max(0, ar.height - height);
+
+                // White body so grey doesn't show through as the article shrinks
+                document.body.style.backgroundColor = '#ffffff';
 
                 const d = 240;
                 const ease = 'cubic-bezier(0.4, 0, 1, 1)';
@@ -557,7 +564,10 @@ export default function PostDetailPage() {
                 article.style.clipPath   = `inset(0 ${clipR}px ${clipB}px 0 round 8px)`;
 
                 sessionStorage.removeItem('cardRect');
-                setTimeout(() => router.push('/'), d - 20);
+                setTimeout(() => {
+                  document.body.style.backgroundColor = '';
+                  router.push('/');
+                }, d - 20);
               } else {
                 sessionStorage.removeItem('cardRect');
                 router.push('/');

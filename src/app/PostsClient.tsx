@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
@@ -10,7 +10,8 @@ import remarkGfm from 'remark-gfm';
 import { Menu } from '@headlessui/react';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import React from "react";
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useTransitionRouter } from 'next-view-transitions';
 
 // Define Post type
 export type Post = {
@@ -102,7 +103,7 @@ export default function PostsClient({ initialPosts }: Props) {
   const firstFetchComplete = useRef<boolean>(
     typeof window !== 'undefined' && !!sessionStorage.getItem('postsCache')
   );
-  const router = useRouter();
+  const router = useTransitionRouter();
   const searchParams = useSearchParams();
 
 
@@ -275,6 +276,22 @@ export default function PostsClient({ initialPosts }: Props) {
     };
   }, [posts]);
 
+  // When returning to the list, restore view-transition-name on the last-viewed card
+  // so the browser can morph the detail article back to its card position.
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined' || posts.length === 0) return;
+    const lastId = sessionStorage.getItem('lastViewedPostId');
+    if (!lastId) return;
+    const card = document.querySelector<HTMLElement>(`[data-post-id="${lastId}"]`);
+    if (!card) return;
+    card.style.setProperty('view-transition-name', 'active-card');
+    const timer = setTimeout(() => {
+      card.style.removeProperty('view-transition-name');
+      sessionStorage.removeItem('lastViewedPostId');
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [posts]);
+
   // Background refresh: fetch new posts and prepend if found
   useEffect(() => {
     if (!session) return;
@@ -410,15 +427,11 @@ export default function PostsClient({ initialPosts }: Props) {
                 style={{ textDecoration: "none" }}
                 onClick={(e) => {
                   e.preventDefault();
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  // Save card position so the detail page can FLIP-animate from here
-                  sessionStorage.setItem('cardRect', JSON.stringify({
-                    top: rect.top, left: rect.left,
-                    width: rect.width, height: rect.height,
-                    scrollY: window.scrollY,
-                  }));
+                  // Tag this card so the View Transitions API can morph it to the article
+                  (e.currentTarget as HTMLElement).style.setProperty('view-transition-name', 'active-card');
                   sessionStorage.setItem('lastViewedPostId', post.id);
                   sessionStorage.setItem('pendingPost', JSON.stringify(post));
+                  sessionStorage.setItem('postsScroll', window.scrollY.toString());
                   router.push(`/posts/${post.id}`);
                 }}
               >

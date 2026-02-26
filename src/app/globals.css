@@ -2,13 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── View Transitions ─────────────────────────────────────────────────────── */
-/* We use CSS FLIP for the card→article grow animation, so the only View       */
-/* Transition left is the root cross-fade for other navigations.               */
+/* ── View Transitions (next-view-transitions) ──────────────────────────────── */
 @media (prefers-reduced-motion: no-preference) {
+  /* Subtle root cross-fade for non-shared navigations */
   ::view-transition-old(root),
   ::view-transition-new(root) {
-    animation-duration: 120ms;
+    animation-duration: 90ms;
+    animation-timing-function: ease-out;
+  }
+
+  /* Card ↔ article shared-element morph */
+  ::view-transition-group(active-card) {
+    animation-duration: 320ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Old element fades out quickly */
+  ::view-transition-old(active-card) {
+    animation-duration: 80ms;
+    animation-timing-function: ease-in;
+  }
+
+  /* New element fades in */
+  ::view-transition-new(active-card) {
+    animation-duration: 280ms;
     animation-timing-function: ease-out;
   }
 }

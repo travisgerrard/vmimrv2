@@ -1,6 +1,7 @@
 // Removed font import
 import "./globals.css";
 import SWRProvider from "./SWRProvider";
+import { ViewTransitions } from 'next-view-transitions';
 
 // Removed font setup
 
@@ -10,7 +11,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // Removed font variable class
+    <ViewTransitions>
+    {/* Removed font variable class */}
     <html lang="en">
       <head>
         <title>Personal Medical Reference</title>
@@ -32,5 +34,6 @@ export default function RootLayout({
         </SWRProvider>
       </body>
     </html>
+    </ViewTransitions>
   );
 }

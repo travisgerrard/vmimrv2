@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
+import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient'; // Correct relative path
 import ReactMarkdown from 'react-markdown';
@@ -77,59 +78,15 @@ export default function PostDetailPage() {
   const [feedback, setFeedback] = useState('');
   const [showShareUrl, setShowShareUrl] = useState(false);
   const params = useParams();
-  const router = useRouter();
+  const router = useTransitionRouter();
   const postId = params?.id as string;
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Card-expand animation: translate article to card's position and clip it to the
-  // card's dimensions, then animate to natural size. No content squish — the article
-  // is always full-size, we just reveal it from the card's rect outward.
-  // Body background is temporarily set to white so the bg-gray-100 body doesn't
-  // show through around the clipped/translated article.
+  // Tag the article so the View Transitions API can morph it to/from the card.
+  // Must use setProperty (not React inline style) for Safari compatibility.
   useLayoutEffect(() => {
     if (!articleRef.current || !post) return;
-    const rectStr = sessionStorage.getItem('cardRect');
-    if (!rectStr) return;
-    // Keep cardRect; the back-navigation handler will remove it
-
-    const { top, left, width, height } = JSON.parse(rectStr) as
-      { top: number; left: number; width: number; height: number; scrollY: number };
-    const article = articleRef.current;
-    const ar = article.getBoundingClientRect();
-    if (ar.width === 0) return;
-
-    const dx    = left - ar.left;
-    const dy    = top  - ar.top;
-    const clipR = Math.max(0, ar.width  - width);
-    const clipB = Math.max(0, ar.height - height);
-
-    // Hide the grey body background for the duration of the animation
-    document.body.style.backgroundColor = '#ffffff';
-
-    article.style.transformOrigin = 'top left';
-    article.style.transform   = `translate(${dx}px, ${dy}px)`;
-    article.style.clipPath    = `inset(0 ${clipR}px ${clipB}px 0 round 8px)`;
-    article.style.transition  = 'none';
-
-    article.getBoundingClientRect(); // flush
-
-    const d = 280;
-    const e = 'cubic-bezier(0.4, 0, 0.2, 1)';
-    article.style.transition = `transform ${d}ms ${e}, clip-path ${d}ms ${e}`;
-    article.style.transform  = '';
-    article.style.clipPath   = 'inset(0 0 0 0 round 4px)';
-
-    const tid = setTimeout(() => {
-      article.style.transformOrigin    = '';
-      article.style.transition         = '';
-      article.style.transform          = '';
-      article.style.clipPath           = '';
-      document.body.style.backgroundColor = '';
-    }, d + 60);
-    return () => {
-      clearTimeout(tid);
-      document.body.style.backgroundColor = '';
-    };
+    articleRef.current.style.setProperty('view-transition-name', 'active-card');
   }, [post]);
 
   useEffect(() => {
@@ -537,41 +494,7 @@ export default function PostDetailPage() {
             className="text-blue-600 hover:underline text-sm"
             onClick={(e) => {
               e.preventDefault();
-              const rectStr = sessionStorage.getItem('cardRect');
-              if (rectStr) {
-                const { scrollY } = JSON.parse(rectStr) as { scrollY: number };
-                sessionStorage.setItem('postsScroll', String(scrollY));
-              }
-
-              const article = articleRef.current;
-              if (article && rectStr) {
-                const { top, left, width, height } = JSON.parse(rectStr) as
-                  { top: number; left: number; width: number; height: number };
-                const ar = article.getBoundingClientRect();
-                const dx    = left - ar.left;
-                const dy    = top  - ar.top;
-                const clipR = Math.max(0, ar.width  - width);
-                const clipB = Math.max(0, ar.height - height);
-
-                // White body so grey doesn't show through as the article shrinks
-                document.body.style.backgroundColor = '#ffffff';
-
-                const d = 240;
-                const ease = 'cubic-bezier(0.4, 0, 1, 1)';
-                article.style.transformOrigin = 'top left';
-                article.style.transition = `transform ${d}ms ${ease}, clip-path ${d}ms ${ease}`;
-                article.style.transform  = `translate(${dx}px, ${dy}px)`;
-                article.style.clipPath   = `inset(0 ${clipR}px ${clipB}px 0 round 8px)`;
-
-                sessionStorage.removeItem('cardRect');
-                setTimeout(() => {
-                  document.body.style.backgroundColor = '';
-                  router.push('/');
-                }, d - 20);
-              } else {
-                sessionStorage.removeItem('cardRect');
-                router.push('/');
-              }
+              router.push('/');
             }}
           >
             &larr; Back to Posts

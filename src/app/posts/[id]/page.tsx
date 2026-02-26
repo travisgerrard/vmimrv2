@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { useTransitionRouter } from 'next-view-transitions';
+import { useState, useEffect, useCallback, useLayoutEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient'; // Correct relative path
 import ReactMarkdown from 'react-markdown';
@@ -78,16 +77,20 @@ export default function PostDetailPage() {
   const [feedback, setFeedback] = useState('');
   const [showShareUrl, setShowShareUrl] = useState(false);
   const params = useParams();
-  const router = useTransitionRouter();
+  const router = useRouter();
   const postId = params?.id as string;
-  const articleRef = useRef<HTMLElement | null>(null);
 
-  // Tag the article so the View Transitions API can morph it to/from the card.
-  // Must use setProperty (not React inline style) for Safari compatibility.
+  // On mount, resolve any waiting forward view-transition so the browser can capture
+  // the new state (article already has .vt-active-card class from first render).
   useLayoutEffect(() => {
-    if (!articleRef.current || !post) return;
-    articleRef.current.style.setProperty('view-transition-name', 'active-card');
-  }, [post]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resolve = (window as any).__vtResolve as (() => void) | undefined;
+    if (resolve) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).__vtResolve = null;
+      resolve();
+    }
+  }, []);
 
   useEffect(() => {
     const checkSessionAndFetch = async () => {
@@ -494,6 +497,20 @@ export default function PostDetailPage() {
             className="text-blue-600 hover:underline text-sm"
             onClick={(e) => {
               e.preventDefault();
+              if (!('startViewTransition' in document)) {
+                router.push('/');
+                return;
+              }
+              // Start the back transition. PostsClient's useLayoutEffect will find the
+              // last-viewed card, restore scroll, set its view-transition-name, then
+              // call __vtResolve so the browser captures the correct new state.
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (document as any).startViewTransition(async () => {
+                await new Promise<void>(resolve => {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (window as any).__vtResolve = resolve;
+                });
+              });
               router.push('/');
             }}
           >
@@ -575,8 +592,7 @@ export default function PostDetailPage() {
       {error && <p className="text-red-600 text-sm mb-4">Note: {error}</p>}
 
       <article
-        ref={articleRef}
-        className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6"
+        className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6 vt-active-card"
       >
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
       </article>

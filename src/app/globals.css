@@ -2,7 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── View Transitions (next-view-transitions) ──────────────────────────────── */
+/* ── View Transitions ─────────────────────────────────────────────────────── */
+
+/* Applied to the detail article so the browser can morph it to/from the card */
+.vt-active-card {
+  view-transition-name: active-card;
+}
 @media (prefers-reduced-motion: no-preference) {
   /* Subtle root cross-fade for non-shared navigations */
   ::view-transition-old(root),

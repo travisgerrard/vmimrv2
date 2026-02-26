@@ -10,8 +10,7 @@ import remarkGfm from 'remark-gfm';
 import { Menu } from '@headlessui/react';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import React from "react";
-import { useSearchParams } from 'next/navigation';
-import { useTransitionRouter } from 'next-view-transitions';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 // Define Post type
 export type Post = {
@@ -103,7 +102,7 @@ export default function PostsClient({ initialPosts }: Props) {
   const firstFetchComplete = useRef<boolean>(
     typeof window !== 'undefined' && !!sessionStorage.getItem('postsCache')
   );
-  const router = useTransitionRouter();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
 
@@ -276,15 +275,34 @@ export default function PostsClient({ initialPosts }: Props) {
     };
   }, [posts]);
 
-  // When returning to the list, restore view-transition-name on the last-viewed card
-  // so the browser can morph the detail article back to its card position.
+  // When returning to the list, restore scroll + view-transition-name on the last-viewed
+  // card synchronously (before paint) so the View Transitions API captures the right state,
+  // then resolve the waiting back-transition promise.
   useLayoutEffect(() => {
     if (typeof window === 'undefined' || posts.length === 0) return;
     const lastId = sessionStorage.getItem('lastViewedPostId');
     if (!lastId) return;
     const card = document.querySelector<HTMLElement>(`[data-post-id="${lastId}"]`);
     if (!card) return;
+
+    // Restore scroll synchronously so the card is visible when the new state is captured.
+    const savedScroll = sessionStorage.getItem('postsScroll');
+    if (savedScroll) {
+      window.scrollTo(0, parseInt(savedScroll, 10));
+      sessionStorage.removeItem('postsScroll');
+    }
+
     card.style.setProperty('view-transition-name', 'active-card');
+
+    // Resolve the waiting back-transition (set up in the detail page back button handler).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resolve = (window as any).__vtResolve as (() => void) | undefined;
+    if (resolve) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).__vtResolve = null;
+      resolve();
+    }
+
     const timer = setTimeout(() => {
       card.style.removeProperty('view-transition-name');
       sessionStorage.removeItem('lastViewedPostId');
@@ -427,11 +445,27 @@ export default function PostsClient({ initialPosts }: Props) {
                 style={{ textDecoration: "none" }}
                 onClick={(e) => {
                   e.preventDefault();
-                  // Tag this card so the View Transitions API can morph it to the article
-                  (e.currentTarget as HTMLElement).style.setProperty('view-transition-name', 'active-card');
+                  const card = e.currentTarget as HTMLElement;
+                  card.style.setProperty('view-transition-name', 'active-card');
                   sessionStorage.setItem('lastViewedPostId', post.id);
                   sessionStorage.setItem('pendingPost', JSON.stringify(post));
                   sessionStorage.setItem('postsScroll', window.scrollY.toString());
+
+                  if (!('startViewTransition' in document)) {
+                    router.push(`/posts/${post.id}`);
+                    return;
+                  }
+
+                  // Start the view transition. The callback waits for the detail page to
+                  // mount and call __vtResolve, at which point the browser captures the
+                  // new state (article with view-transition-name) and plays the morph.
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (document as any).startViewTransition(async () => {
+                    await new Promise<void>(resolve => {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (window as any).__vtResolve = resolve;
+                    });
+                  });
                   router.push(`/posts/${post.id}`);
                 }}
               >

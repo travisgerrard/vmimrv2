@@ -488,7 +488,7 @@ export default function PostDetailPage() {
   const otherFiles = mediaFiles.filter(file => !file.file_type?.startsWith('image/'));
 
   return (
-    <div className="container mx-auto p-6 md:p-10 max-w-4xl font-sans">
+    <div className="container mx-auto p-6 md:p-10 max-w-4xl font-sans vt-active-card">
 
       {/* ── Nav bar ───────────────────────────────────────────────── */}
       <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
@@ -592,7 +592,7 @@ export default function PostDetailPage() {
       {error && <p className="text-red-600 text-sm mb-4">Note: {error}</p>}
 
       <article
-        className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6 vt-active-card"
+        className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6"
       >
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
       </article>

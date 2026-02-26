@@ -9,28 +9,27 @@
   view-transition-name: active-card;
 }
 @media (prefers-reduced-motion: no-preference) {
-  /* Subtle root cross-fade for non-shared navigations */
+  /* Suppress the root cross-fade — let the named morph do all the work */
   ::view-transition-old(root),
   ::view-transition-new(root) {
-    animation-duration: 90ms;
-    animation-timing-function: ease-out;
+    animation: none;
   }
 
-  /* Card ↔ article shared-element morph */
+  /* Card ↔ page-container shared-element morph */
   ::view-transition-group(active-card) {
-    animation-duration: 320ms;
+    animation-duration: 280ms;
     animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* Old element fades out quickly */
+  /* Old element (card) fades out very quickly */
   ::view-transition-old(active-card) {
-    animation-duration: 80ms;
+    animation-duration: 60ms;
     animation-timing-function: ease-in;
   }
 
-  /* New element fades in */
+  /* New element (page container) fades in with the morph */
   ::view-transition-new(active-card) {
-    animation-duration: 280ms;
+    animation-duration: 240ms;
     animation-timing-function: ease-out;
   }
 }

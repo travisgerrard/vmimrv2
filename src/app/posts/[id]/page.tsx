@@ -81,19 +81,42 @@ export default function PostDetailPage() {
   const postId = params?.id as string;
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Set view-transition-name via DOM API (works in Safari; React inline style doesn't)
-  // Then signal the waiting view transition that the article is ready to be captured
+  // FLIP animation: when arriving from a card click, animate the article from the
+  // card's position/size to its natural position (grow effect, no screen freeze).
   useLayoutEffect(() => {
     if (!articleRef.current || !post) return;
-    articleRef.current.style.setProperty('view-transition-name', 'active-card');
-    // Signal the waiting vtNavigate() call that the destination is ready
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ((window as any).__vtResolve) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).__vtResolve();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (window as any).__vtResolve;
-    }
+    const rectStr = sessionStorage.getItem('cardRect');
+    if (!rectStr) return;
+    // Keep cardRect for the back animation — don't remove it yet
+
+    const { top, left, width, height } = JSON.parse(rectStr) as
+      { top: number; left: number; width: number; height: number; scrollY: number };
+    const article = articleRef.current;
+    const ar = article.getBoundingClientRect();
+    if (ar.width === 0) return;
+
+    const dx = left - ar.left;
+    const dy = top - ar.top;
+    const sx = width / ar.width;
+    const sy = height / ar.height;
+
+    // Teleport article to card position/size (no transition)
+    article.style.transformOrigin = 'top left';
+    article.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+    article.style.transition = 'none';
+
+    // Force layout flush so the browser registers the starting position
+    article.getBoundingClientRect();
+
+    // Animate to natural position
+    article.style.transition = 'transform 220ms cubic-bezier(0.2, 0, 0, 1)';
+    article.style.transform = '';
+
+    const tid = setTimeout(() => {
+      article.style.transformOrigin = '';
+      article.style.transition = '';
+    }, 270);
+    return () => clearTimeout(tid);
   }, [post]);
 
   useEffect(() => {
@@ -499,21 +522,23 @@ export default function PostDetailPage() {
         <Link href="/" legacyBehavior>
           <a
             className="text-blue-600 hover:underline text-sm"
-            onPointerDown={() => sessionStorage.setItem('postsScroll', window.scrollY.toString())}
             onClick={(e) => {
               e.preventDefault();
-              sessionStorage.setItem('postsScroll', window.scrollY.toString());
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              if ((document as any).startViewTransition) {
-                let resolveReady!: () => void;
-                const readyPromise = new Promise<void>(r => { resolveReady = r; });
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (window as any).__vtResolve = resolveReady;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (document as any).startViewTransition(async () => {
-                  router.push('/');
-                  await Promise.race([readyPromise, new Promise<void>(r => setTimeout(r, 500))]);
-                });
+              // Restore the list's scroll position (saved when the card was clicked)
+              const rectStr = sessionStorage.getItem('cardRect');
+              if (rectStr) {
+                const { scrollY } = JSON.parse(rectStr) as { scrollY: number };
+                sessionStorage.setItem('postsScroll', String(scrollY));
+                sessionStorage.removeItem('cardRect');
+              }
+              // Shrink the article back toward the card, then navigate
+              if (articleRef.current) {
+                const article = articleRef.current;
+                article.style.transformOrigin = 'top center';
+                article.style.transition = 'transform 160ms cubic-bezier(0.4, 0, 1, 1), opacity 160ms ease-in';
+                article.style.transform = 'scale(0.94) translateY(8px)';
+                article.style.opacity = '0';
+                setTimeout(() => router.push('/'), 155);
               } else {
                 router.push('/');
               }

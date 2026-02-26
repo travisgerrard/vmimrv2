@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
@@ -29,26 +29,6 @@ type Props = {
   initialPosts: Post[];
 };
 
-// Start a view transition that waits for the destination page to signal ready
-// before the browser captures the new state. This enables true shared-element
-// morphing even though Next.js router.push() is asynchronous.
-function vtNavigate(navigate: () => void) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (!(document as any).startViewTransition) {
-    navigate();
-    return;
-  }
-  let resolveReady!: () => void;
-  const readyPromise = new Promise<void>(r => { resolveReady = r; });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (window as any).__vtResolve = resolveReady;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (document as any).startViewTransition(async () => {
-    navigate();
-    // Wait for destination to call window.__vtResolve(), or fall back after 500ms
-    await Promise.race([readyPromise, new Promise<void>(r => setTimeout(r, 500))]);
-  });
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const markdownComponents = {
@@ -277,29 +257,6 @@ export default function PostsClient({ initialPosts }: Props) {
     fetchAllSignedUrls();
   }, [posts]);
 
-  // After posts render, restore view-transition-name on the last-viewed card for back animation
-  useLayoutEffect(() => {
-    if (typeof window === 'undefined' || posts.length === 0) return;
-    const lastId = sessionStorage.getItem('lastViewedPostId');
-    if (!lastId) return;
-    const card = document.querySelector<HTMLElement>(`[data-post-id="${lastId}"]`);
-    if (!card) return;
-    card.style.setProperty('view-transition-name', 'active-card');
-    // Signal the waiting view transition that the destination (card) is ready
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ((window as any).__vtResolve) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).__vtResolve();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (window as any).__vtResolve;
-    }
-    const timer = setTimeout(() => {
-      card.style.removeProperty('view-transition-name');
-      sessionStorage.removeItem('lastViewedPostId');
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [posts]);
-
   // Restore scroll position robustly: wait until posts are rendered in the DOM
   useEffect(() => {
     let raf: number | null = null;
@@ -453,11 +410,16 @@ export default function PostsClient({ initialPosts }: Props) {
                 style={{ textDecoration: "none" }}
                 onClick={(e) => {
                   e.preventDefault();
-                  (e.currentTarget as HTMLElement).style.setProperty('view-transition-name', 'active-card');
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  // Save card position so the detail page can FLIP-animate from here
+                  sessionStorage.setItem('cardRect', JSON.stringify({
+                    top: rect.top, left: rect.left,
+                    width: rect.width, height: rect.height,
+                    scrollY: window.scrollY,
+                  }));
                   sessionStorage.setItem('lastViewedPostId', post.id);
-                  // Pre-populate detail page so it can render instantly (needed for the morph)
                   sessionStorage.setItem('pendingPost', JSON.stringify(post));
-                  vtNavigate(() => router.push(`/posts/${post.id}`));
+                  router.push(`/posts/${post.id}`);
                 }}
               >
                 <div className="text-xs text-gray-400 flex items-center gap-2 mb-2">

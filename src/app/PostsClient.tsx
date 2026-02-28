@@ -1,15 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useMemo, useLayoutEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
-import ReactMarkdown from "react-markdown";
 import Image from "next/image";
-import remarkGfm from 'remark-gfm';
 import { Menu } from '@headlessui/react';
 import { Bars3Icon } from '@heroicons/react/24/outline';
-import React from "react";
 import { useRouter, useSearchParams } from 'next/navigation';
 
 // Define Post type
@@ -30,16 +27,6 @@ type Props = {
 };
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const markdownComponents = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  a: (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (props: any) => <span {...props} style={{ color: "#2563eb", textDecoration: "underline", cursor: "not-allowed" }} />
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ) as React.ComponentType<any>
-};
-
 // Strip markdown image syntax for card previews, return text and extracted image URLs
 function stripMarkdownImages(content: string): { text: string; inlineImageUrls: string[] } {
   const inlineImageUrls: string[] = [];
@@ -48,6 +35,39 @@ function stripMarkdownImages(content: string): { text: string; inlineImageUrls: 
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   return { text, inlineImageUrls };
+}
+
+// Convert markdown to plain text for card previews
+function toPlainText(md: string): string {
+  return md
+    .replace(/!\[.*?\]\(.*?\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*{1,2}([^*\n]+)\*{1,2}/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/^-{3,}$/gm, '')
+    .replace(/\n+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+// Wrap occurrences of `term` in <mark> for card preview highlighting
+function highlightText(text: string, term: string): ReactNode {
+  if (!term.trim()) return text;
+  const escaped = term.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  if (parts.length === 1) return text;
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1
+          ? <mark key={i} className="bg-yellow-100 rounded-sm px-0.5">{part}</mark>
+          : part
+      )}
+    </>
+  );
 }
 
 function formatCardDate(iso: string): string {
@@ -92,6 +112,7 @@ export default function PostsClient({ initialPosts }: Props) {
     return initialPosts;
   });
   const [showOnlyMine, setShowOnlyMine] = useState(false);
+  const [showOnlyStarred, setShowOnlyStarred] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingSession, setLoadingSession] = useState(true);
@@ -172,8 +193,12 @@ export default function PostsClient({ initialPosts }: Props) {
           queryBuilder = queryBuilder.eq("user_id", session.user.id);
         }
         if (searchTerm.trim()) {
-          // Partial match for content, full match for tags
-          queryBuilder = queryBuilder.or(`content.ilike.%${searchTerm.trim()}%,tags.cs.{${searchTerm.trim()}}`);
+          // Full-text search on the indexed fts column (stemming + ranking),
+          // OR exact tag match. Sanitise the term to keep PostgREST syntax clean.
+          const term = searchTerm.trim().replace(/[(),]/g, ' ').trim();
+          queryBuilder = queryBuilder.or(
+            `fts.plfts(english).${term},tags.cs.{${term}}`
+          );
         }
         const { data: postsData, error: fetchError } = await queryBuilder;
         if (fetchError) throw fetchError;
@@ -404,6 +429,9 @@ export default function PostsClient({ initialPosts }: Props) {
     if (showOnlyMine && session) {
       visiblePosts = visiblePosts.filter((p) => p.user_id === session.user.id);
     }
+    if (showOnlyStarred) {
+      visiblePosts = visiblePosts.filter((p) => p.is_starred);
+    }
     if (error) {
       return <p className="text-center text-red-600">{error}</p>;
     }
@@ -424,10 +452,11 @@ export default function PostsClient({ initialPosts }: Props) {
         </p>
       );
     }
-    if (visiblePosts.length === 0 && showOnlyMine) {
+    if (visiblePosts.length === 0 && (showOnlyMine || showOnlyStarred)) {
       return (
         <p className="text-center text-gray-500">
-          You have no posts {searchTerm.trim() ? `matching "${searchTerm}"` : ''}.
+          No {showOnlyStarred ? 'starred ' : ''}{showOnlyMine ? 'posts by you' : 'posts'}
+          {searchTerm.trim() ? ` matching "${searchTerm}"` : ''}.
         </p>
       );
     }
@@ -476,14 +505,13 @@ export default function PostsClient({ initialPosts }: Props) {
                 </div>
                 {(() => {
                   const { text, inlineImageUrls } = stripMarkdownImages(post.content);
-                  const preview = text.substring(0, 200) + (text.length > 200 ? "…" : "");
+                  const plain = toPlainText(text);
+                  const preview = plain.substring(0, 200) + (plain.length > 200 ? "…" : "");
                   return (
                     <>
-                      <div className="prose max-w-none text-gray-700 text-sm">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                          {preview}
-                        </ReactMarkdown>
-                      </div>
+                      <p className="text-gray-700 text-sm leading-relaxed">
+                        {highlightText(preview, searchTerm)}
+                      </p>
                       {inlineImageUrls.length > 0 && (
                         <div className="mt-3 grid grid-cols-4 gap-2">
                           {inlineImageUrls.slice(0, 4).map((url, i) => (
@@ -500,9 +528,18 @@ export default function PostsClient({ initialPosts }: Props) {
                 {post.tags && post.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-3">
                     {post.tags.map(tag => (
-                      <span key={tag} className="inline-block bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5 text-xs font-medium text-blue-600">
+                      <button
+                        key={tag}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setInputValue(tag);
+                          setSearchTerm(tag);
+                        }}
+                        className="inline-block bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-100 hover:border-blue-400 transition-colors"
+                      >
                         {tag}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -539,7 +576,7 @@ export default function PostsClient({ initialPosts }: Props) {
       );
     }
     return null;
-  }, [posts, showOnlyMine, session, loadingPosts, error, searchTerm, signedThumbnailUrls]);
+  }, [posts, showOnlyMine, showOnlyStarred, session, loadingPosts, error, searchTerm, signedThumbnailUrls]);
 
   if (loadingSession) {
     return (
@@ -572,6 +609,17 @@ export default function PostsClient({ initialPosts }: Props) {
                 }`}
               >
                 {showOnlyMine ? "My Posts ✓" : "My Posts"}
+              </button>
+              <button
+                onClick={() => setShowOnlyStarred(!showOnlyStarred)}
+                title={showOnlyStarred ? "Show all posts" : "Show only starred posts"}
+                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${
+                  showOnlyStarred
+                    ? "bg-yellow-100 border-yellow-400 text-yellow-800 hover:bg-yellow-200"
+                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                {showOnlyStarred ? "★ Starred ✓" : "★ Starred"}
               </button>
               <Link href="/quiz" legacyBehavior>
                 <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors">
@@ -635,6 +683,22 @@ export default function PostsClient({ initialPosts }: Props) {
                           }`}
                         >
                           {showOnlyMine ? "My Posts ✓" : "My Posts"}
+                        </button>
+                      )}
+                    </Menu.Item>
+                    <Menu.Item>
+                      {({ active }: { active: boolean }) => (
+                        <button
+                          onClick={() => setShowOnlyStarred(!showOnlyStarred)}
+                          className={`w-full text-left px-4 py-2 text-sm ${
+                            showOnlyStarred
+                              ? "bg-yellow-100 text-yellow-900"
+                              : active
+                              ? "bg-gray-100 text-gray-900"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          {showOnlyStarred ? "★ Starred ✓" : "★ Starred"}
                         </button>
                       )}
                     </Menu.Item>

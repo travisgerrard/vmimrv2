@@ -16,6 +16,7 @@ type Quiz = {
   questions: QuizQuestion[];
   range_from: string;
   range_to: string;
+  created_at: string;
 };
 
 type Post = {
@@ -231,27 +232,48 @@ export default function QuizPage() {
         </button>
       </div>
       {genError && <div className="text-red-600 mb-4">{genError}</div>}
+
+      {/* Divider between generation controls and quiz results */}
+      {quizzes.length > 0 && (
+        <hr className="my-6 border-gray-200" />
+      )}
+
       {/* Most Recent Quiz */}
       {mostRecentQuiz && (
         <div className="mb-8 p-4 border rounded bg-white shadow">
-          <h2 className="text-lg font-bold mb-4">Most Recent Quiz</h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+            <h2 className="text-lg font-bold">Most Recent Quiz</h2>
+            <span className="text-sm text-gray-500">
+              Generated {new Date(mostRecentQuiz.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {' · '}posts from {mostRecentQuiz.range_from} → {mostRecentQuiz.range_to}
+              {' · '}{mostRecentQuiz.questions.length} questions
+            </span>
+          </div>
           <QuizDisplay quiz={mostRecentQuiz} />
           <div className="mt-2">
             <Link href={`/quiz/${mostRecentQuiz.id}`} className="text-blue-600 hover:underline text-xs">Share / View Full Quiz</Link>
           </div>
         </div>
       )}
+
       {/* Quiz History */}
-      <h3 className="text-md font-semibold mb-2">Quiz History</h3>
-      <ul className="space-y-2">
-        {oldQuizzes.map(q => (
-          <li key={q.id}>
-            <Link href={`/quiz/${q.id}`} className="text-blue-600 hover:underline">
-              Quiz from {q.range_from} to {q.range_to} ({q.questions.length} questions)
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {oldQuizzes.length > 0 && (
+        <>
+          <h3 className="text-md font-semibold mb-2 text-gray-700">Quiz History</h3>
+          <ul className="space-y-2">
+            {oldQuizzes.map(q => (
+              <li key={q.id}>
+                <Link href={`/quiz/${q.id}`} className="text-blue-600 hover:underline text-sm">
+                  {new Date(q.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </Link>
+                <span className="text-gray-400 text-xs ml-2">
+                  posts {q.range_from} → {q.range_to} · {q.questions.length} questions
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {loading && <div className="text-gray-500 mt-4">Loading quizzes...</div>}
       {error && <div className="text-red-600 mt-4">{error}</div>}
     </main>

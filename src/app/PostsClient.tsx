@@ -118,7 +118,6 @@ export default function PostsClient({ initialPosts }: Props) {
   const [loadingSession, setLoadingSession] = useState(true);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [signedThumbnailUrls, setSignedThumbnailUrls] = useState<Record<string, string | null>>({});
   const postsContainerRef = useRef<HTMLDivElement | null>(null);
   const firstFetchComplete = useRef<boolean>(
     typeof window !== 'undefined' && !!sessionStorage.getItem('postsCache')
@@ -251,36 +250,8 @@ export default function PostsClient({ initialPosts }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, searchTerm, showOnlyMine]);
 
-  // Effect to fetch signed URLs for all unique image paths when posts change
-  useEffect(() => {
-    const fetchAllSignedUrls = async () => {
-      const uniquePaths = new Set<string>();
-      posts.forEach((post) => {
-        post.imagePaths?.forEach((path) => {
-          if (path) uniquePaths.add(path);
-        });
-      });
-      if (uniquePaths.size === 0) {
-        setSignedThumbnailUrls({});
-        return;
-      }
-      const urlsMap: Record<string, string | null> = {};
-      const fetchPromises = Array.from(uniquePaths).map(async (path) => {
-        try {
-          const { data, error } = await supabase.storage
-            .from("post-media")
-            .createSignedUrl(path, 60 * 5);
-          if (error) throw error;
-          urlsMap[path] = data.signedUrl;
-        } catch {
-          urlsMap[path] = null;
-        }
-      });
-      await Promise.all(fetchPromises);
-      setSignedThumbnailUrls((prevUrls) => ({ ...prevUrls, ...urlsMap }));
-    };
-    fetchAllSignedUrls();
-  }, [posts]);
+  const getPublicImageUrl = (path: string): string =>
+    supabase.storage.from("post-media").getPublicUrl(path).data.publicUrl;
 
   // Restore scroll position robustly: wait until posts are rendered in the DOM
   useEffect(() => {
@@ -499,19 +470,27 @@ export default function PostsClient({ initialPosts }: Props) {
                   router.push(`/posts/${post.id}`);
                 }}
               >
-                <div className="text-xs text-gray-400 flex items-center gap-2 mb-2">
-                  {post.hasPdf && <span title="Contains PDF">📄</span>}
-                  <span>{formatCardDate(post.created_at)}</span>
-                </div>
                 {(() => {
                   const { text, inlineImageUrls } = stripMarkdownImages(post.content);
                   const plain = toPlainText(text);
-                  const preview = plain.substring(0, 200) + (plain.length > 200 ? "…" : "");
+                  const newlineIdx = plain.indexOf('. ');
+                  const title = newlineIdx > 0 && newlineIdx < 120 ? plain.substring(0, newlineIdx + 1) : plain.substring(0, 80);
+                  const body = plain.substring(title.length).trim();
+                  const bodyPreview = body.substring(0, 160) + (body.length > 160 ? "…" : "");
                   return (
                     <>
-                      <p className="text-gray-700 text-sm leading-relaxed">
-                        {highlightText(preview, searchTerm)}
+                      <div className="flex items-center gap-2 mb-2">
+                        {post.hasPdf && <span title="Contains PDF" className="text-xs">📄</span>}
+                        <span className="text-xs text-gray-400">{formatCardDate(post.created_at)}</span>
+                      </div>
+                      <p className="text-gray-900 text-sm font-semibold leading-snug mb-1">
+                        {highlightText(title, searchTerm)}
                       </p>
+                      {bodyPreview && (
+                        <p className="text-gray-500 text-sm leading-relaxed">
+                          {highlightText(bodyPreview, searchTerm)}
+                        </p>
+                      )}
                       {inlineImageUrls.length > 0 && (
                         <div className="mt-3 grid grid-cols-4 gap-2">
                           {inlineImageUrls.slice(0, 4).map((url, i) => (
@@ -545,28 +524,19 @@ export default function PostsClient({ initialPosts }: Props) {
                 )}
                 {post.imagePaths && post.imagePaths.length > 0 && (
                   <div className="mt-3 grid grid-cols-4 gap-2">
-                    {post.imagePaths.slice(0, 4).map((path, index) => {
-                      const signedUrl = signedThumbnailUrls[path];
-                      return (
-                        <div key={index} className="w-full h-20 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
-                          {signedUrl === undefined ? (
-                            <span className="text-xs text-gray-400">…</span>
-                          ) : signedUrl ? (
-                            <Image
-                              src={signedUrl}
-                              alt={`Post thumbnail ${index + 1}`}
-                              className="w-full h-full object-cover rounded"
-                              width={128}
-                              height={80}
-                              loading="lazy"
-                              unoptimized
-                            />
-                          ) : (
-                            <span className="text-xs text-red-400">!</span>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {post.imagePaths.slice(0, 4).map((path, index) => (
+                      <div key={index} className="w-full h-20 bg-gray-100 rounded overflow-hidden">
+                        <Image
+                          src={getPublicImageUrl(path)}
+                          alt={`Post thumbnail ${index + 1}`}
+                          className="w-full h-full object-cover rounded"
+                          width={128}
+                          height={80}
+                          loading="lazy"
+                          unoptimized
+                        />
+                      </div>
+                    ))}
                   </div>
                 )}
               </a>
@@ -576,7 +546,7 @@ export default function PostsClient({ initialPosts }: Props) {
       );
     }
     return null;
-  }, [posts, showOnlyMine, showOnlyStarred, session, loadingPosts, error, searchTerm, signedThumbnailUrls]);
+  }, [posts, showOnlyMine, showOnlyStarred, session, loadingPosts, error, searchTerm, getPublicImageUrl]);
 
   if (loadingSession) {
     return (
@@ -751,14 +721,19 @@ export default function PostsClient({ initialPosts }: Props) {
           </Menu>
         </div>
       </div>
-      <div className="mb-6">
-        <input
-          type="search"
-          placeholder="Search posts by content or tags..."
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          className="block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 placeholder-gray-500"
-        />
+      <div className="mb-6 flex justify-center">
+        <div className="relative w-full max-w-xl">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0Z" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search posts by content or tags..."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            className="block w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 placeholder-gray-400"
+          />
+        </div>
       </div>
       {renderPostsList}
     </main>

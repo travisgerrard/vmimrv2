@@ -67,9 +67,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   };
 
   return (
-    <main className="container mx-auto px-4 md:px-8 py-6 max-w-4xl font-sans">
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-5">
+    <main className="container mx-auto px-4 md:px-8 max-w-4xl font-sans">
+      {/* ── Sticky header + search ──────────────────────────────── */}
+      <div className="sticky top-0 z-30 bg-gray-100/90 backdrop-blur-sm pt-6 pb-3">
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-4">
         <Link href="/" legacyBehavior>
           <a className="group cursor-pointer" style={{ textDecoration: 'none' }}>
             <p className="text-xs text-gray-400 font-medium uppercase tracking-widest mb-0.5 group-hover:text-gray-600 transition-colors">Medical Notes</p>
@@ -251,9 +253,12 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           className="block w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 placeholder-gray-400"
         />
       </div>
+      </div>{/* end sticky */}
 
       {/* ── Page content ────────────────────────────────────────── */}
-      {children}
+      <div className="pb-8">
+        {children}
+      </div>
     </main>
   );
 }

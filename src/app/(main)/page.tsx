@@ -1,8 +1,6 @@
-// Remove 'use client' from this file and convert to a server component
-import PostsClient from './PostsClient';
-import { supabase } from '../lib/supabaseClient';
+import PostsClient from '../PostsClient';
+import { supabase } from '../../lib/supabaseClient';
 
-// Define Post type (reuse from client component)
 type Post = {
   id: string;
   created_at: string;
@@ -15,18 +13,14 @@ type Post = {
 };
 
 export default async function Home() {
-  // Fetch posts and their media info on the server
-  // (No session filtering here; client will filter by user session)
   let posts: Post[] = [];
   try {
-    // Fetch all posts (optionally limit for demo)
     const { data: postsData, error: postsError } = await supabase
       .from('posts')
       .select('id, created_at, content, tags, is_starred, user_id');
     if (postsError) throw postsError;
     posts = postsData || [];
 
-    // Fetch media info for all posts
     if (posts.length > 0) {
       const postIds = posts.map((p) => p.id);
       const { data: mediaFiles, error: mediaError } = await supabase
@@ -57,9 +51,8 @@ export default async function Home() {
       }
     }
   } catch {
-    // Optionally log error
+    // ignore
   }
 
-  // Pass posts to the client component
   return <PostsClient initialPosts={posts.map(post => ({ ...post, user_id: post.user_id || '' }))} />;
 }

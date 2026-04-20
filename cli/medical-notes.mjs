@@ -104,13 +104,21 @@ function parseArgs(argv) {
     }
   }
 
-  // `npm run` (without --) strips --flag names, sets npm_config_<flag>=true,
-  // and passes the values as positional args. Reconstruct from npm_config_* hints.
+  // `npm run` (without --) strips --flag names and either:
+  //   a) sets npm_config_<flag>=<value> when the flag has a value (--tags foo → npm_config_tags=foo)
+  //   b) sets npm_config_<flag>=true when the flag is bare (--force → npm_config_force=true)
+  // Reconstruct flags from npm_config_* env vars.
   const remaining = [...result.positional];
   for (const key of ['file', 'tags', 'tag', 'limit', 'search']) {
     const envVal = process.env[`npm_config_${key}`];
-    if (!result.flags[key] && (envVal === 'true' || envVal === '') && remaining.length) {
-      result.flags[key] = remaining.shift();
+    if (!result.flags[key] && envVal !== undefined && envVal !== 'false') {
+      if (envVal === 'true' || envVal === '') {
+        // bare flag — value is the next positional arg
+        if (remaining.length) result.flags[key] = remaining.shift();
+      } else {
+        // npm already captured the value directly
+        result.flags[key] = envVal;
+      }
     }
   }
   // Replace positional with the unconsumed remainder

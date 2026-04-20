@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>UI Mockup — Medical Notes</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .tag-pill { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 11px; font-weight: 500; }
+
+  /* Option A accent colors by specialty */
+  .accent-blue  { border-left: 3px solid #3b82f6; }
+  .accent-green { border-left: 3px solid #10b981; }
+  .accent-purple{ border-left: 3px solid #8b5cf6; }
+  .accent-orange{ border-left: 3px solid #f59e0b; }
+  .accent-red   { border-left: 3px solid #ef4444; }
+  .accent-gray  { border-left: 3px solid #d1d5db; }
+</style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+<!-- ======================================================
+     SECTION LABELS
+====================================================== -->
+<div class="max-w-4xl mx-auto px-6 pt-10 pb-2">
+  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Option A — Accent border + colored tags + compact nav</p>
+</div>
+
+<!-- ======================================================
+     OPTION A
+====================================================== -->
+<div class="max-w-4xl mx-auto px-6 pb-10">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between py-5">
+    <div>
+      <p class="text-xs text-gray-400 font-medium uppercase tracking-widest mb-0.5">Medical Notes</p>
+      <h1 class="text-2xl font-bold text-gray-900 leading-none">Your Posts</h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <!-- Primary action -->
+      <a href="#" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow-sm hover:bg-blue-700 transition-colors">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        New Post
+      </a>
+      <!-- Secondary group -->
+      <div class="flex items-center gap-1 border border-gray-200 rounded-lg bg-white px-1 py-1 shadow-sm">
+        <button class="px-3 py-1 rounded-md text-sm text-gray-600 hover:bg-gray-100 font-medium transition-colors">Quiz</button>
+        <div class="w-px h-4 bg-gray-200"></div>
+        <button class="px-3 py-1 rounded-md text-sm text-gray-600 hover:bg-gray-100 font-medium transition-colors">★ Starred</button>
+        <div class="w-px h-4 bg-gray-200"></div>
+        <!-- Settings / profile icon -->
+        <button class="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 transition-colors">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="mb-5 relative">
+    <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0Z"/>
+    </svg>
+    <input type="text" placeholder="Search posts by content or tags…"
+      class="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+  </div>
+
+  <!-- Cards -->
+  <div class="space-y-3">
+
+    <!-- Card 1 — today, no tags -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 accent-blue px-5 py-4 cursor-pointer hover:shadow-md transition-shadow">
+      <p class="text-xs text-gray-400 mb-1.5">8:51 AM</p>
+      <p class="text-sm font-semibold text-gray-900 leading-snug mb-1">Seattle Area - Outside + VMFH Non-Oncology Infusion Centers: North End: Infusion</p>
+      <p class="text-xs text-gray-500 leading-relaxed">Solutions (Bellingham, Everett, Federal Way, Tacoma) Infusion for Health (Montlake Terrace, Bellevue) South End PURE Infusions (Olympia, Kirkland…</p>
+    </div>
+
+    <!-- Card 2 — infectious disease -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 accent-green px-5 py-4 cursor-pointer hover:shadow-md transition-shadow">
+      <p class="text-xs text-gray-400 mb-1.5">Apr 18</p>
+      <p class="text-sm font-semibold text-gray-900 leading-snug mb-1">Yes, treating strep throat with antibiotics at 72 hours is still worthwhile when there is a newborn in the household</p>
+      <p class="text-xs text-gray-500 leading-relaxed mb-3">Primarily to reduce transmission risk to the vulnerable infant, even though the symptomatic benefit to the adult is modest at this point…</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="tag-pill bg-green-50 text-green-700 border border-green-200">infectious disease</span>
+        <span class="tag-pill bg-green-50 text-green-700 border border-green-200">pediatrics</span>
+        <span class="tag-pill bg-green-50 text-green-700 border border-green-200">strep</span>
+        <span class="tag-pill bg-green-50 text-green-700 border border-green-200">neonatal</span>
+      </div>
+    </div>
+
+    <!-- Card 3 — resident -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 accent-purple px-5 py-4 cursor-pointer hover:shadow-md transition-shadow">
+      <p class="text-xs text-gray-400 mb-1.5">Apr 14</p>
+      <p class="text-sm font-semibold text-gray-900 leading-snug mb-1">GLP-1 RAs vs SGLT2i on (Micro)albuminuria in type 2 diabetes with kidney involvement</p>
+      <p class="text-xs text-gray-500 leading-relaxed mb-3">Both GLP-1 receptor agonists and SGLT2 inhibitors improve albuminuria, but their relative strength and focus differ across studies…</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="tag-pill bg-purple-50 text-purple-700 border border-purple-200">resident</span>
+      </div>
+    </div>
+
+    <!-- Card 4 — no tags, short -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 accent-gray px-5 py-4 cursor-pointer hover:shadow-md transition-shadow">
+      <p class="text-xs text-gray-400 mb-1.5">Apr 13</p>
+      <p class="text-sm font-semibold text-gray-900 leading-snug mb-1">Cholesterol guidelines website</p>
+      <p class="text-xs text-gray-500 leading-relaxed">Site I built to help guide next steps — travisgerrard.github.io/cholesterol/</p>
+    </div>
+
+    <!-- Card 5 — neurology/sleep -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 accent-orange px-5 py-4 cursor-pointer hover:shadow-md transition-shadow">
+      <p class="text-xs text-gray-400 mb-1.5">Apr 3</p>
+      <p class="text-sm font-semibold text-gray-900 leading-snug mb-1">Naps: Good vs. Bad and Rules for Effective Napping</p>
+      <p class="text-xs text-gray-500 leading-relaxed mb-3">Source: Eric Topal's Ground Truths, "A Master Class on Sleep" with Professor Yo-El Ju. Good Nappers vs. Bad Nappers — people generally know which they are…</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="tag-pill bg-orange-50 text-orange-700 border border-orange-200">sleep</span>
+        <span class="tag-pill bg-orange-50 text-orange-700 border border-orange-200">neurology</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<div class="max-w-4xl mx-auto px-6 pt-6 pb-2 border-t-2 border-dashed border-gray-300">
+  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Option B — No accent border, richer card background tints + pill date badge</p>
+</div>
+
+<!-- ======================================================
+     OPTION B
+====================================================== -->
+<div class="max-w-4xl mx-auto px-6 pb-10">
+
+  <!-- Header (same compact nav) -->
+  <div class="flex items-center justify-between py-5">
+    <h1 class="text-2xl font-bold text-gray-900">Your Posts</h1>
+    <div class="flex items-center gap-2">
+      <a href="#" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow-sm">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        New Post
+      </a>
+      <div class="flex items-center gap-1 border border-gray-200 rounded-lg bg-white px-1 py-1 shadow-sm">
+        <button class="px-3 py-1 rounded-md text-sm text-gray-600 hover:bg-gray-100 font-medium">Quiz</button>
+        <div class="w-px h-4 bg-gray-200"></div>
+        <button class="px-3 py-1 rounded-md text-sm text-gray-600 hover:bg-gray-100 font-medium">★ Starred</button>
+        <div class="w-px h-4 bg-gray-200"></div>
+        <button class="p-1.5 rounded-md text-gray-500 hover:bg-gray-100">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="mb-5 relative">
+    <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0Z"/>
+    </svg>
+    <input type="text" placeholder="Search posts by content or tags…"
+      class="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm text-sm text-gray-800 placeholder-gray-400 focus:outline-none"/>
+  </div>
+
+  <!-- Cards -->
+  <div class="space-y-3">
+
+    <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-900 leading-snug mb-1">Seattle Area - Outside + VMFH Non-Oncology Infusion Centers: North End: Infusion</p>
+          <p class="text-xs text-gray-500 leading-relaxed">Solutions (Bellingham, Everett, Federal Way, Tacoma) Infusion for Health (Montlake Terrace, Bellevue) South End PURE Infusions…</p>
+        </div>
+        <span class="shrink-0 text-xs bg-gray-100 text-gray-500 rounded-full px-2.5 py-0.5 font-medium whitespace-nowrap">8:51 AM</span>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-900 leading-snug mb-1">Yes, treating strep throat with antibiotics at 72 hours is still worthwhile when there is a newborn in the household</p>
+          <p class="text-xs text-gray-500 leading-relaxed mb-2.5">Primarily to reduce transmission risk to the vulnerable infant, even though the symptomatic benefit to the adult is modest…</p>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="tag-pill bg-blue-50 text-blue-600 border border-blue-200">infectious disease</span>
+            <span class="tag-pill bg-blue-50 text-blue-600 border border-blue-200">pediatrics</span>
+            <span class="tag-pill bg-blue-50 text-blue-600 border border-blue-200">strep</span>
+            <span class="tag-pill bg-blue-50 text-blue-600 border border-blue-200">neonatal</span>
+          </div>
+        </div>
+        <span class="shrink-0 text-xs bg-gray-100 text-gray-500 rounded-full px-2.5 py-0.5 font-medium whitespace-nowrap">Apr 18</span>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-900 leading-snug mb-1">GLP-1 RAs vs SGLT2i on (Micro)albuminuria in type 2 diabetes with kidney involvement</p>
+          <p class="text-xs text-gray-500 leading-relaxed mb-2.5">Both GLP-1 receptor agonists and SGLT2 inhibitors improve albuminuria, but their relative strength and focus differ across studies…</p>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="tag-pill bg-blue-50 text-blue-600 border border-blue-200">resident</span>
+          </div>
+        </div>
+        <span class="shrink-0 text-xs bg-gray-100 text-gray-500 rounded-full px-2.5 py-0.5 font-medium whitespace-nowrap">Apr 14</span>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-900 leading-snug mb-1">Cholesterol guidelines website</p>
+          <p class="text-xs text-gray-500 leading-relaxed">Site I built to help guide next steps — travisgerrard.github.io/cholesterol/</p>
+        </div>
+        <span class="shrink-0 text-xs bg-gray-100 text-gray-500 rounded-full px-2.5 py-0.5 font-medium whitespace-nowrap">Apr 13</span>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-900 leading-snug mb-1">Naps: Good vs. Bad and Rules for Effective Napping</p>
+          <p class="text-xs text-gray-500 leading-relaxed mb-2.5">Source: Eric Topal's Ground Truths, "A Master Class on Sleep" with Professor Yo-El Ju. Good Nappers vs. Bad Nappers…</p>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="tag-pill bg-blue-50 text-blue-600 border border-blue-200">sleep</span>
+            <span class="tag-pill bg-blue-50 text-blue-600 border border-blue-200">neurology</span>
+          </div>
+        </div>
+        <span class="shrink-0 text-xs bg-gray-100 text-gray-500 rounded-full px-2.5 py-0.5 font-medium whitespace-nowrap">Apr 3</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

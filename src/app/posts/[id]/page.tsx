@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useLayoutEffect } from 'react';
+import { useState, useEffect, useLayoutEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient'; // Correct relative path
@@ -40,6 +40,35 @@ type PatientSummary = {
   summary: string;
 };
 
+// ── Accent color (mirrors PostsClient) ────────────────────────────────────
+const TAG_COLOR_MAP: Record<string, string> = {
+  'infectious disease': 'green', 'pediatrics': 'green', 'neonatal': 'green',
+  'strep': 'green', 'antibiotic': 'green', 'infection': 'green', 'vaccines': 'green',
+  'neurology': 'orange', 'sleep': 'orange', 'neuroscience': 'orange',
+  'resident': 'purple', 'teaching': 'purple', 'education': 'purple',
+  'cardiology': 'red', 'cardiac': 'red', 'heart': 'red', 'ecg': 'red',
+  'pulmonology': 'blue', 'respiratory': 'blue', 'asthma': 'blue', 'copd': 'blue',
+  'orthopedics': 'orange', 'musculoskeletal': 'orange', 'shoulder': 'orange',
+};
+type AccentColor = 'blue' | 'green' | 'purple' | 'orange' | 'red' | 'gray';
+const COLOR_CONFIG: Record<AccentColor, { border: string; tagBg: string; tagText: string; tagBorder: string }> = {
+  blue:   { border: '#3b82f6', tagBg: 'bg-blue-50',   tagText: 'text-blue-700',   tagBorder: 'border-blue-200' },
+  green:  { border: '#10b981', tagBg: 'bg-green-50',  tagText: 'text-green-700',  tagBorder: 'border-green-200' },
+  purple: { border: '#8b5cf6', tagBg: 'bg-purple-50', tagText: 'text-purple-700', tagBorder: 'border-purple-200' },
+  orange: { border: '#f59e0b', tagBg: 'bg-orange-50', tagText: 'text-orange-700', tagBorder: 'border-orange-200' },
+  red:    { border: '#ef4444', tagBg: 'bg-red-50',    tagText: 'text-red-700',    tagBorder: 'border-red-200' },
+  gray:   { border: '#d1d5db', tagBg: 'bg-gray-100',  tagText: 'text-gray-600',   tagBorder: 'border-gray-200' },
+};
+function getAccentColor(tags: string[] | null): AccentColor {
+  if (!tags || tags.length === 0) return 'gray';
+  for (const tag of tags) {
+    const color = TAG_COLOR_MAP[tag.toLowerCase()];
+    if (color) return color as AccentColor;
+  }
+  return 'blue';
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export default function PostDetailPage() {
   // Pre-populate from sessionStorage so the article renders instantly on card click
   // (the view transition captures the article before the async Supabase fetch completes)
@@ -68,7 +97,6 @@ export default function PostDetailPage() {
   const [generatingLink, setGeneratingLink] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [signedImageUrls, setSignedImageUrls] = useState<Record<string, string | null>>({});
   const [isSummarizationPending, setIsSummarizationPending] = useState(false); // Track summary status
   const [revokingLink, setRevokingLink] = useState(false); // State for revoke loading
   const [patientSummary, setPatientSummary] = useState<PatientSummary | null>(null);
@@ -202,20 +230,10 @@ export default function PostDetailPage() {
   };
 
 
-   const getMediaUrl = useCallback(async (filePath: string): Promise<string | null> => {
-       try {
-           const { data, error } = await supabase
-               .storage
-               .from('post-media')
-               .createSignedUrl(filePath, 60 * 5);
-
-           if (error) throw error;
-           return data.signedUrl;
-       } catch (err) {
-           console.error(`Error creating signed URL for ${filePath}:`, err);
-           return null;
-       }
-   }, []);
+   const getMediaUrl = (filePath: string): string => {
+       const { data } = supabase.storage.from('post-media').getPublicUrl(filePath);
+       return data.publicUrl;
+   };
 
    const toggleStar = async () => {
         if (!post || togglingStar) return;
@@ -340,23 +358,6 @@ export default function PostDetailPage() {
         }
     };
 
-   useEffect(() => {
-     const fetchSignedUrls = async () => {
-       if (mediaFiles.length > 0) {
-         const urls: Record<string, string | null> = {};
-         await Promise.all(mediaFiles.map(async (file) => {
-           if (file.file_type?.startsWith('image/') && file.file_path) {
-             const url = await getMediaUrl(file.file_path);
-             urls[file.id] = url;
-           }
-         }));
-         setSignedImageUrls(urls);
-       } else {
-         setSignedImageUrls({});
-       }
-     };
-     fetchSignedUrls();
-   }, [mediaFiles, getMediaUrl]); // Keep existing dependencies
 
    // --- Realtime Subscription for Post Updates (Summary) ---
    useEffect(() => {
@@ -487,22 +488,24 @@ export default function PostDetailPage() {
   const imageFiles = mediaFiles.filter(file => file.file_type?.startsWith('image/'));
   const otherFiles = mediaFiles.filter(file => !file.file_type?.startsWith('image/'));
 
+  const accent = getAccentColor(post.tags);
+  const colors = COLOR_CONFIG[accent];
+
   return (
     <div className="container mx-auto p-6 md:p-10 max-w-4xl font-sans vt-active-card">
 
       {/* ── Nav bar ───────────────────────────────────────────────── */}
-      <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
+      <div className="mb-5 flex flex-wrap justify-between items-center gap-3">
+        {/* Back link */}
         <Link href="/" legacyBehavior>
           <a
-            className="text-blue-600 hover:underline text-sm"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
             onClick={(e) => {
               e.preventDefault();
               if (!('startViewTransition' in document)) {
                 router.push('/');
                 return;
               }
-              // Set __vtResolve BEFORE startViewTransition to avoid the Safari race
-              // condition where useLayoutEffect on the list fires before the callback.
               let vtResolve!: () => void;
               const vtPromise = new Promise<void>(r => { vtResolve = r; });
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -512,42 +515,59 @@ export default function PostDetailPage() {
               router.push('/');
             }}
           >
-            &larr; Back to Posts
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+            </svg>
+            <span>
+              <span className="text-gray-400 text-xs uppercase tracking-widest font-medium">Medical Notes</span>
+            </span>
           </a>
         </Link>
+
+        {/* Action buttons */}
         {session && session.user.id === post.user_id && (
           <div className="flex items-center gap-2">
+            {/* Star — standalone toggle */}
             <button
               onClick={toggleStar}
               disabled={togglingStar}
-              className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors disabled:opacity-50 ${isStarred ? 'bg-yellow-100 border-yellow-400 text-yellow-800 hover:bg-yellow-200' : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'}`}
+              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 ${
+                isStarred
+                  ? 'bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              } shadow-sm`}
             >
               {togglingStar ? '…' : (isStarred ? '★ Starred' : '☆ Star')}
             </button>
-            <Link href={`/posts/${post.id}/edit`} legacyBehavior>
-              <a className="px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors">Edit</a>
-            </Link>
-            <button
-              onClick={secretUrl ? () => setShowShareUrl(v => !v) : generateShareLink}
-              disabled={generatingLink}
-              className="px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors disabled:opacity-50"
-            >
-              {generatingLink ? 'Generating…' : (secretUrl ? (showShareUrl ? 'Hide Link' : 'Share Link') : 'Share')}
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600 text-sm font-medium transition-colors disabled:opacity-50"
-            >
-              {deleting ? 'Deleting…' : 'Delete'}
-            </button>
+            {/* Edit | Share | Delete grouped */}
+            <div className="flex items-center gap-0 border border-gray-200 rounded-lg bg-white shadow-sm divide-x divide-gray-200">
+              <Link href={`/posts/${post.id}/edit`} legacyBehavior>
+                <a className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors rounded-l-lg">
+                  Edit
+                </a>
+              </Link>
+              <button
+                onClick={secretUrl ? () => setShowShareUrl(v => !v) : generateShareLink}
+                disabled={generatingLink}
+                className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                {generatingLink ? 'Generating…' : (secretUrl ? (showShareUrl ? 'Hide' : 'Share') : 'Share')}
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50 rounded-r-lg"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
           </div>
         )}
       </div>
 
       {/* ── Share URL (collapsed by default) ─────────────────────── */}
       {secretUrl && showShareUrl && (
-        <div className="mb-4 p-3 bg-gray-50 rounded border border-gray-200 flex items-center justify-between gap-4">
+        <div className="mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between gap-4">
           <span className="text-sm font-mono break-all text-gray-600">
             {`${window.location.origin}/share/${secretUrl}`}
           </span>
@@ -572,14 +592,14 @@ export default function PostDetailPage() {
       )}
 
       {/* ── Metadata row: date + tags ─────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <span className="text-sm text-gray-400">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <span className="text-xs text-gray-400">
           {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
         </span>
         {post.tags && post.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {post.tags.map(tag => (
-              <span key={tag} className="inline-block bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5 text-xs font-medium text-blue-600">
+              <span key={tag} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${colors.tagBg} ${colors.tagText} ${colors.tagBorder}`}>
                 {tag}
               </span>
             ))}
@@ -590,7 +610,8 @@ export default function PostDetailPage() {
       {error && <p className="text-red-600 text-sm mb-4">Note: {error}</p>}
 
       <article
-        className="prose lg:prose-xl max-w-none bg-white p-6 rounded-lg shadow mb-6"
+        className="prose prose-gray max-w-none bg-white px-6 py-5 rounded-xl border border-gray-100 shadow-sm mb-6"
+        style={{ borderLeft: `3px solid ${colors.border}` }}
       >
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
       </article>
@@ -617,34 +638,25 @@ export default function PostDetailPage() {
        </div>
        {/* --- End Summary Section --- */}
       {imageFiles.length > 0 && (
-        <div className="mb-6 mt-6 space-y-4"> {/* Added mt-6 for spacing */}
-          {imageFiles.map(file => {
-            const imageUrl = signedImageUrls[file.id];
-            return (
-              <div key={file.id}>
-                {imageUrl === undefined ? (
-                  <div className="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 animate-pulse">Loading Image...</div>
-                ) : imageUrl ? (
-                  <Image
-                    src={imageUrl}
-                    alt={file.file_name}
-                    className="w-full max-w-full h-auto rounded-lg shadow"
-                    width={512}
-                    height={256}
-                    loading="lazy"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">Image Preview Unavailable</div>
-                )}
-              </div>
-            );
-          })}
+        <div className="mb-6 mt-6 space-y-4">
+          {imageFiles.map(file => (
+            <div key={file.id}>
+              <Image
+                src={getMediaUrl(file.file_path)}
+                alt={file.file_name}
+                className="w-full max-w-full h-auto rounded-lg shadow"
+                width={512}
+                height={256}
+                loading="lazy"
+                unoptimized
+              />
+            </div>
+          ))}
         </div>
       )}
 
       {otherFiles.length > 0 && (
-        <div className="mt-6 p-6 bg-white rounded-lg shadow">
+        <div className="mt-6 p-6 bg-white rounded-xl border border-gray-100 shadow-sm">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">Attached Files</h3>
             <ul className="space-y-3">
                 {otherFiles.map(file => (
@@ -654,11 +666,7 @@ export default function PostDetailPage() {
                             <p className="text-xs text-gray-500">{file.file_type}</p>
                         </div>
                         <button
-                            onClick={async () => {
-                                const url = await getMediaUrl(file.file_path);
-                                if (url) window.open(url, '_blank');
-                                else alert('Could not generate download link for this file.');
-                            }}
+                            onClick={() => window.open(getMediaUrl(file.file_path), '_blank')}
                             className="text-blue-600 hover:underline text-xs ml-4 whitespace-nowrap"
                         >
                             View/Download

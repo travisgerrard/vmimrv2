@@ -84,6 +84,44 @@ function formatCardDate(iso: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// ── Accent color system ────────────────────────────────────────────────────
+const TAG_COLOR_MAP: Record<string, string> = {
+  // green — infectious / peds
+  'infectious disease': 'green', 'pediatrics': 'green', 'neonatal': 'green',
+  'strep': 'green', 'antibiotic': 'green', 'infection': 'green', 'vaccines': 'green',
+  // orange — neuro / sleep
+  'neurology': 'orange', 'sleep': 'orange', 'neuroscience': 'orange',
+  // purple — education / training
+  'resident': 'purple', 'teaching': 'purple', 'education': 'purple',
+  // red — cardiology
+  'cardiology': 'red', 'cardiac': 'red', 'heart': 'red', 'ecg': 'red',
+  // teal — pulm / resp (mapped to blue since Tailwind teal ≈ blue-ish)
+  'pulmonology': 'blue', 'respiratory': 'blue', 'asthma': 'blue', 'copd': 'blue',
+  // orange — musculoskeletal / ortho
+  'orthopedics': 'orange', 'musculoskeletal': 'orange', 'shoulder': 'orange',
+};
+
+type AccentColor = 'blue' | 'green' | 'purple' | 'orange' | 'red' | 'gray';
+
+const COLOR_CONFIG: Record<AccentColor, { border: string; tagBg: string; tagText: string; tagBorder: string }> = {
+  blue:   { border: '#3b82f6', tagBg: 'bg-blue-50',   tagText: 'text-blue-700',   tagBorder: 'border-blue-200' },
+  green:  { border: '#10b981', tagBg: 'bg-green-50',  tagText: 'text-green-700',  tagBorder: 'border-green-200' },
+  purple: { border: '#8b5cf6', tagBg: 'bg-purple-50', tagText: 'text-purple-700', tagBorder: 'border-purple-200' },
+  orange: { border: '#f59e0b', tagBg: 'bg-orange-50', tagText: 'text-orange-700', tagBorder: 'border-orange-200' },
+  red:    { border: '#ef4444', tagBg: 'bg-red-50',    tagText: 'text-red-700',    tagBorder: 'border-red-200' },
+  gray:   { border: '#d1d5db', tagBg: 'bg-gray-100',  tagText: 'text-gray-600',   tagBorder: 'border-gray-200' },
+};
+
+function getAccentColor(tags: string[] | null): AccentColor {
+  if (!tags || tags.length === 0) return 'gray';
+  for (const tag of tags) {
+    const color = TAG_COLOR_MAP[tag.toLowerCase()];
+    if (color) return color as AccentColor;
+  }
+  return 'blue';
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 function PostsSkeleton() {
   return (
     <div className="space-y-4">
@@ -434,15 +472,18 @@ export default function PostsClient({ initialPosts }: Props) {
     if (visiblePosts.length > 0) {
       return (
         <div ref={postsContainerRef} className="space-y-4">
-          {visiblePosts.map((post) => (
+          {visiblePosts.map((post) => {
+            const accent = getAccentColor(post.tags);
+            const colors = COLOR_CONFIG[accent];
+            return (
             <Link href={`/posts/${post.id}`} legacyBehavior passHref key={post.id}>
               <a
-                className="block p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-150 cursor-pointer focus:ring-2 focus:ring-blue-500"
+                className="block bg-white rounded-xl shadow-sm border border-gray-100 px-5 py-4 hover:shadow-md transition-shadow duration-150 cursor-pointer focus:ring-2 focus:ring-blue-500"
                 tabIndex={0}
                 role="button"
                 aria-label="Open post"
                 data-post-id={post.id}
-                style={{ textDecoration: "none" }}
+                style={{ textDecoration: "none", borderLeft: `3px solid ${colors.border}` }}
                 onClick={(e) => {
                   e.preventDefault();
                   const card = e.currentTarget as HTMLElement;
@@ -505,7 +546,7 @@ export default function PostsClient({ initialPosts }: Props) {
                   );
                 })()}
                 {post.tags && post.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-3">
+                  <div className="flex flex-wrap gap-1.5 mt-3">
                     {post.tags.map(tag => (
                       <button
                         key={tag}
@@ -515,7 +556,7 @@ export default function PostsClient({ initialPosts }: Props) {
                           setInputValue(tag);
                           setSearchTerm(tag);
                         }}
-                        className="inline-block bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-100 hover:border-blue-400 transition-colors"
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border transition-opacity hover:opacity-80 ${colors.tagBg} ${colors.tagText} ${colors.tagBorder}`}
                       >
                         {tag}
                       </button>
@@ -541,7 +582,8 @@ export default function PostsClient({ initialPosts }: Props) {
                 )}
               </a>
             </Link>
-          ))}
+            );
+          })}
         </div>
       );
     }
@@ -559,181 +601,194 @@ export default function PostsClient({ initialPosts }: Props) {
   return (
     <main className="container mx-auto p-4 md:p-8 font-sans">
       <div className="flex items-center justify-between mb-6 w-full">
-        <h1 className="text-3xl font-bold text-gray-900 mb-0">{session ? 'Your Posts' : 'All Posts'}</h1>
-        {/* Desktop Button Group */}
-        <div className="hidden sm:flex flex-row gap-2 items-center">
-          <Link href="/integrations" legacyBehavior>
-            <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors">
-              API
-            </a>
-          </Link>
+        {/* Title */}
+        <div>
+          <p className="text-xs text-gray-400 font-medium uppercase tracking-widest mb-0.5">Medical Notes</p>
+          <h1 className="text-2xl font-bold text-gray-900 leading-none">{session ? 'Your Posts' : 'All Posts'}</h1>
+        </div>
+
+        {/* Desktop nav */}
+        <div className="hidden sm:flex items-center gap-2">
           {session && (
             <>
-              <button
-                onClick={() => setShowOnlyMine(!showOnlyMine)}
-                title={showOnlyMine ? "Show all posts" : "Show only my posts"}
-                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${
-                  showOnlyMine
-                    ? "bg-yellow-100 border-yellow-400 text-yellow-800 hover:bg-yellow-200"
-                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                {showOnlyMine ? "My Posts ✓" : "My Posts"}
-              </button>
-              <button
-                onClick={() => setShowOnlyStarred(!showOnlyStarred)}
-                title={showOnlyStarred ? "Show all posts" : "Show only starred posts"}
-                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${
-                  showOnlyStarred
-                    ? "bg-yellow-100 border-yellow-400 text-yellow-800 hover:bg-yellow-200"
-                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                {showOnlyStarred ? "★ Starred ✓" : "★ Starred"}
-              </button>
-              <Link href="/quiz" legacyBehavior>
-                <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors">
-                  Quiz
-                </a>
-              </Link>
-              <Link href="/settings" legacyBehavior>
-                <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 text-sm font-medium transition-colors">
-                  Settings
-                </a>
-              </Link>
+              {/* Primary action */}
               <Link href="/posts/new" legacyBehavior>
-                <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-blue-600 bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors">
-                  + New Post
+                <a className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow-sm hover:bg-blue-700 transition-colors">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  New Post
                 </a>
               </Link>
-              <button
-                onClick={handleLogout}
-                title={`Logout ${session?.user?.email ?? ''}`}
-                className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-red-600 hover:border-red-300 text-sm font-medium transition-colors"
-              >
-                Logout
-              </button>
-            </>
-          )}
-          {!session && (
-            <Link href="/login" legacyBehavior>
-              <a className="inline-flex items-center justify-center px-3 py-1.5 rounded border border-blue-600 bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium transition-colors">
-                Login / Sign Up
-              </a>
-            </Link>
-          )}
-        </div>
-        {/* Mobile Hamburger Menu */}
-        <div className="sm:hidden">
-          <Menu as="div" className="relative inline-block text-left">
-            <Menu.Button className="inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500">
-              <Bars3Icon className="h-6 w-6" aria-hidden="true" />
-            </Menu.Button>
-            <Menu.Items className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-              <div className="py-1">
-                <Menu.Item>
-                  {({ active }: { active: boolean }) => (
-                    <Link href="/integrations" legacyBehavior>
-                      <a className={`block px-4 py-2 text-sm ${active ? "bg-gray-100 text-gray-900" : "text-gray-700"}`}>API</a>
-                    </Link>
-                  )}
-                </Menu.Item>
-                {session && (
-                  <>
+              {/* Grouped pill: Quiz | Starred | profile menu */}
+              <div className="flex items-center gap-0 border border-gray-200 rounded-lg bg-white shadow-sm divide-x divide-gray-200">
+                <Link href="/quiz" legacyBehavior>
+                  <a className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors rounded-l-lg">
+                    Quiz
+                  </a>
+                </Link>
+                <button
+                  onClick={() => setShowOnlyStarred(!showOnlyStarred)}
+                  title={showOnlyStarred ? "Show all posts" : "Show only starred posts"}
+                  className={`inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium transition-colors ${
+                    showOnlyStarred ? "bg-yellow-50 text-yellow-700" : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {showOnlyStarred ? "★ Starred ✓" : "★ Starred"}
+                </button>
+                {/* Profile / overflow menu */}
+                <Menu as="div" className="relative">
+                  <Menu.Button className="inline-flex items-center justify-center px-2.5 py-1.5 text-gray-500 hover:bg-gray-50 transition-colors rounded-r-lg focus:outline-none">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <circle cx="12" cy="8" r="4" />
+                      <path strokeLinecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                    </svg>
+                  </Menu.Button>
+                  <Menu.Items className="origin-top-right absolute right-0 mt-2 w-52 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50 py-1">
                     <Menu.Item>
                       {({ active }: { active: boolean }) => (
                         <button
                           onClick={() => setShowOnlyMine(!showOnlyMine)}
-                          className={`w-full text-left px-4 py-2 text-sm ${
-                            showOnlyMine
-                              ? "bg-yellow-100 text-yellow-900"
-                              : active
-                              ? "bg-gray-100 text-gray-900"
-                              : "text-gray-700"
-                          }`}
+                          className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${active ? "bg-gray-50" : ""} text-gray-700`}
                         >
-                          {showOnlyMine ? "My Posts ✓" : "My Posts"}
+                          My Posts
+                          {showOnlyMine && <span className="text-blue-600 text-xs font-semibold">✓</span>}
                         </button>
-                      )}
-                    </Menu.Item>
-                    <Menu.Item>
-                      {({ active }: { active: boolean }) => (
-                        <button
-                          onClick={() => setShowOnlyStarred(!showOnlyStarred)}
-                          className={`w-full text-left px-4 py-2 text-sm ${
-                            showOnlyStarred
-                              ? "bg-yellow-100 text-yellow-900"
-                              : active
-                              ? "bg-gray-100 text-gray-900"
-                              : "text-gray-700"
-                          }`}
-                        >
-                          {showOnlyStarred ? "★ Starred ✓" : "★ Starred"}
-                        </button>
-                      )}
-                    </Menu.Item>
-                    <Menu.Item>
-                      {({ active }: { active: boolean }) => (
-                        <Link href="/quiz" legacyBehavior>
-                          <a className={`block px-4 py-2 text-sm ${active ? "bg-gray-100 text-gray-900" : "text-gray-700"}`}>Quiz</a>
-                        </Link>
                       )}
                     </Menu.Item>
                     <Menu.Item>
                       {({ active }: { active: boolean }) => (
                         <Link href="/settings" legacyBehavior>
-                          <a className={`block px-4 py-2 text-sm ${active ? "bg-gray-100 text-gray-900" : "text-gray-700"}`}>Settings</a>
+                          <a className={`block px-4 py-2 text-sm text-gray-700 ${active ? "bg-gray-50" : ""}`}>Settings</a>
                         </Link>
                       )}
                     </Menu.Item>
                     <Menu.Item>
                       {({ active }: { active: boolean }) => (
-                        <Link href="/posts/new" legacyBehavior>
-                          <a className={`block px-4 py-2 text-sm ${active ? "bg-blue-100 text-blue-900" : "text-blue-700"}`}>+ New Post</a>
+                        <Link href="/integrations" legacyBehavior>
+                          <a className={`block px-4 py-2 text-sm text-gray-700 ${active ? "bg-gray-50" : ""}`}>API</a>
                         </Link>
                       )}
                     </Menu.Item>
+                    <div className="border-t border-gray-100 my-1" />
                     <Menu.Item>
                       {({ active }: { active: boolean }) => (
                         <button
                           onClick={handleLogout}
-                          className={`w-full text-left px-4 py-2 text-sm ${active ? "bg-red-100 text-red-900" : "text-red-700"}`}
+                          className={`w-full text-left px-4 py-2 text-sm text-red-600 ${active ? "bg-red-50" : ""}`}
                         >
-                          Logout {session?.user?.email ? `(${session.user.email.split("@")[0]})` : ""}
+                          Logout{session?.user?.email ? ` (${session.user.email.split("@")[0]})` : ""}
                         </button>
                       )}
                     </Menu.Item>
-                  </>
-                )}
-                {!session && (
+                  </Menu.Items>
+                </Menu>
+              </div>
+            </>
+          )}
+          {!session && (
+            <Link href="/login" legacyBehavior>
+              <a className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-blue-600 bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium transition-colors">
+                Login / Sign Up
+              </a>
+            </Link>
+          )}
+        </div>
+
+        {/* Mobile hamburger — unchanged behaviour, updated styles */}
+        <div className="sm:hidden">
+          <Menu as="div" className="relative inline-block text-left">
+            <Menu.Button className="inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500">
+              <Bars3Icon className="h-6 w-6" aria-hidden="true" />
+            </Menu.Button>
+            <Menu.Items className="origin-top-right absolute right-0 mt-2 w-52 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50 py-1">
+              {session && (
+                <>
                   <Menu.Item>
                     {({ active }: { active: boolean }) => (
-                      <Link href="/login" legacyBehavior>
-                        <a className={`block px-4 py-2 text-sm ${active ? "bg-blue-100 text-blue-900" : "text-blue-700"}`}>
-                          Login / Sign Up
-                        </a>
+                      <Link href="/posts/new" legacyBehavior>
+                        <a className={`block px-4 py-2 text-sm font-semibold ${active ? "bg-blue-50 text-blue-900" : "text-blue-700"}`}>+ New Post</a>
                       </Link>
                     )}
                   </Menu.Item>
-                )}
-              </div>
+                  <Menu.Item>
+                    {({ active }: { active: boolean }) => (
+                      <Link href="/quiz" legacyBehavior>
+                        <a className={`block px-4 py-2 text-sm ${active ? "bg-gray-100 text-gray-900" : "text-gray-700"}`}>Quiz</a>
+                      </Link>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }: { active: boolean }) => (
+                      <button
+                        onClick={() => setShowOnlyStarred(!showOnlyStarred)}
+                        className={`w-full text-left px-4 py-2 text-sm ${showOnlyStarred ? "bg-yellow-50 text-yellow-900" : active ? "bg-gray-100 text-gray-900" : "text-gray-700"}`}
+                      >
+                        {showOnlyStarred ? "★ Starred ✓" : "★ Starred"}
+                      </button>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }: { active: boolean }) => (
+                      <button
+                        onClick={() => setShowOnlyMine(!showOnlyMine)}
+                        className={`w-full text-left px-4 py-2 text-sm ${showOnlyMine ? "bg-yellow-50 text-yellow-900" : active ? "bg-gray-100 text-gray-900" : "text-gray-700"}`}
+                      >
+                        {showOnlyMine ? "My Posts ✓" : "My Posts"}
+                      </button>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }: { active: boolean }) => (
+                      <Link href="/settings" legacyBehavior>
+                        <a className={`block px-4 py-2 text-sm ${active ? "bg-gray-100 text-gray-900" : "text-gray-700"}`}>Settings</a>
+                      </Link>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }: { active: boolean }) => (
+                      <Link href="/integrations" legacyBehavior>
+                        <a className={`block px-4 py-2 text-sm ${active ? "bg-gray-100 text-gray-900" : "text-gray-700"}`}>API</a>
+                      </Link>
+                    )}
+                  </Menu.Item>
+                  <div className="border-t border-gray-100 my-1" />
+                  <Menu.Item>
+                    {({ active }: { active: boolean }) => (
+                      <button
+                        onClick={handleLogout}
+                        className={`w-full text-left px-4 py-2 text-sm text-red-600 ${active ? "bg-red-50" : ""}`}
+                      >
+                        Logout {session?.user?.email ? `(${session.user.email.split("@")[0]})` : ""}
+                      </button>
+                    )}
+                  </Menu.Item>
+                </>
+              )}
+              {!session && (
+                <Menu.Item>
+                  {({ active }: { active: boolean }) => (
+                    <Link href="/login" legacyBehavior>
+                      <a className={`block px-4 py-2 text-sm ${active ? "bg-blue-100 text-blue-900" : "text-blue-700"}`}>Login / Sign Up</a>
+                    </Link>
+                  )}
+                </Menu.Item>
+              )}
             </Menu.Items>
           </Menu>
         </div>
       </div>
-      <div className="mb-6 flex justify-center">
-        <div className="relative w-full max-w-xl">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0Z" />
-          </svg>
-          <input
-            type="search"
-            placeholder="Search posts by content or tags..."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            className="block w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 placeholder-gray-400"
-          />
-        </div>
+      <div className="mb-5 relative">
+        <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0Z" />
+        </svg>
+        <input
+          type="search"
+          placeholder="Search posts by content or tags..."
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          className="block w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 placeholder-gray-400"
+        />
       </div>
       {renderPostsList}
     </main>

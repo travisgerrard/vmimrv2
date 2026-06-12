@@ -5,10 +5,12 @@ import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
 import Image from "next/image";
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 20;
 const POSTS_CACHE_KEY = 'postsCache';
+const URL_FILTERS_CHANGED_EVENT = 'medical-notes:url-change';
+const LIST_CONTENT_MAX_LENGTH = 800;
 
 // Define Post type
 export type Post = {
@@ -25,7 +27,35 @@ export type Post = {
 
 type Props = {
   initialPosts: Post[];
+  initialPostsReady?: boolean;
+  initialSearchTerm?: string;
+  initialShowOnlyMine?: boolean;
+  initialShowOnlyStarred?: boolean;
 };
+
+function readUrlFilters(url?: string) {
+  if (typeof window === 'undefined') {
+    return { searchTerm: '', showOnlyMine: false, showOnlyStarred: false };
+  }
+
+  const search = url ? new URL(url, window.location.origin).search : window.location.search;
+  const params = new URLSearchParams(search);
+  return {
+    searchTerm: params.get('q') || '',
+    showOnlyMine: params.get('mine') === '1',
+    showOnlyStarred: params.get('starred') === '1',
+  };
+}
+
+function notifyUrlFiltersChanged(url: string) {
+  window.dispatchEvent(new CustomEvent(URL_FILTERS_CHANGED_EVENT, { detail: url }));
+}
+
+function toListContent(content: string) {
+  return content.length > LIST_CONTENT_MAX_LENGTH
+    ? content.slice(0, LIST_CONTENT_MAX_LENGTH)
+    : content;
+}
 
 function readPostsCache(): Post[] | null {
   if (typeof window === 'undefined') return null;
@@ -198,28 +228,61 @@ function PostsSkeleton() {
   );
 }
 
-export default function PostsClient({ initialPosts }: Props) {
+export default function PostsClient({
+  initialPosts,
+  initialPostsReady = initialPosts.length > 0,
+  initialSearchTerm = '',
+  initialShowOnlyMine = false,
+  initialShowOnlyStarred = false,
+}: Props) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [session, setSession] = useState<Session | null>(null);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [loadingSession, setLoadingSession] = useState(true);
-  const [loadingPosts, setLoadingPosts] = useState(initialPosts.length === 0);
+  const [loadingPosts, setLoadingPosts] = useState(!initialPostsReady);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMorePosts, setHasMorePosts] = useState(true);
   const [nextPage, setNextPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [urlFilters, setUrlFilters] = useState(() => ({
+    searchTerm: initialSearchTerm,
+    showOnlyMine: initialShowOnlyMine,
+    showOnlyStarred: initialShowOnlyStarred,
+  }));
   const postsContainerRef = useRef<HTMLDivElement | null>(null);
   const firstFetchComplete = useRef<boolean>(
-    initialPosts.length > 0
+    initialPostsReady
   );
 
-  // Filters and search term are driven by URL params (managed by the layout)
-  const searchTerm = searchParams?.get('q') || '';
-  const showOnlyMine = searchParams?.get('mine') === '1';
-  const showOnlyStarred = searchParams?.get('starred') === '1';
+  const { searchTerm, showOnlyMine, showOnlyStarred } = urlFilters;
 
   useEffect(() => {
+    setPosts(initialPosts);
+    setNextPage(1);
+    setHasMorePosts(initialPosts.length === PAGE_SIZE);
+    firstFetchComplete.current = initialPostsReady;
+    setLoadingPosts(!initialPostsReady);
+  }, [initialPosts, initialPostsReady]);
+
+  useEffect(() => {
+    const syncFilters = (event?: Event) => {
+      const url = event instanceof CustomEvent && typeof event.detail === 'string'
+        ? event.detail
+        : undefined;
+      setUrlFilters(readUrlFilters(url));
+    };
+
+    syncFilters();
+    window.addEventListener('popstate', syncFilters);
+    window.addEventListener(URL_FILTERS_CHANGED_EVENT, syncFilters);
+    return () => {
+      window.removeEventListener('popstate', syncFilters);
+      window.removeEventListener(URL_FILTERS_CHANGED_EVENT, syncFilters);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initialPostsReady) return;
     if (searchTerm.trim() || showOnlyMine || showOnlyStarred) return;
 
     const cachedPosts = readPostsCache();
@@ -229,7 +292,7 @@ export default function PostsClient({ initialPosts }: Props) {
     setHasMorePosts(cachedPosts.length === PAGE_SIZE);
     firstFetchComplete.current = true;
     setLoadingPosts(false);
-  }, [searchTerm, showOnlyMine, showOnlyStarred]);
+  }, [initialPostsReady, searchTerm, showOnlyMine, showOnlyStarred]);
 
   // Fetch session and listen for changes
   useEffect(() => {
@@ -240,14 +303,14 @@ export default function PostsClient({ initialPosts }: Props) {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (!session) {
+      if (!session && showOnlyMine) {
         setPosts([]);
         setError(null);
         setHasMorePosts(false);
       }
     });
     return () => subscription?.unsubscribe();
-  }, []);
+  }, [showOnlyMine]);
 
   const fetchPostsPage = useCallback(async (pageIndex: number) => {
     let queryBuilder = supabase
@@ -276,6 +339,7 @@ export default function PostsClient({ initialPosts }: Props) {
 
     const postsPage: Post[] = (postsData || []).map((post) => ({
       ...post,
+      content: toListContent(post.content || ''),
       user_id: (post as { user_id?: string }).user_id || '',
     }));
 
@@ -284,7 +348,9 @@ export default function PostsClient({ initialPosts }: Props) {
 
   // Fetch the first small page after auth resolves. Cached posts render immediately while this refreshes.
   useEffect(() => {
-    if (loadingSession) return;
+    const isInitialDefaultView = initialPostsReady && !searchTerm.trim() && !showOnlyMine && !showOnlyStarred;
+    if (isInitialDefaultView) return;
+    if (showOnlyMine && loadingSession) return;
     if (showOnlyMine && !session) {
       setPosts([]);
       setHasMorePosts(false);
@@ -323,7 +389,7 @@ export default function PostsClient({ initialPosts }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [fetchPostsPage, loadingSession, searchTerm, showOnlyMine, showOnlyStarred, session]);
+  }, [fetchPostsPage, initialPostsReady, loadingSession, searchTerm, showOnlyMine, showOnlyStarred, session]);
 
   const loadMorePosts = useCallback(async () => {
     if (loadingMore || loadingPosts || !hasMorePosts) return;
@@ -528,7 +594,9 @@ export default function PostsClient({ initialPosts }: Props) {
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          router.replace(`/?q=${encodeURIComponent(tag)}`, { scroll: false });
+                          const target = `/?q=${encodeURIComponent(tag)}`;
+                          router.replace(target, { scroll: false });
+                          notifyUrlFiltersChanged(target);
                         }}
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border transition-opacity hover:opacity-80 ${colors.tagBg} ${colors.tagText} ${colors.tagBorder}`}
                       >

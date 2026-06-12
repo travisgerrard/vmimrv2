@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
@@ -8,7 +8,35 @@ import { Menu } from '@headlessui/react';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import type { Session } from '@supabase/supabase-js';
 
-export default function MainLayout({ children }: { children: React.ReactNode }) {
+function MainLayoutFallback() {
+  return (
+    <main className="container mx-auto px-4 md:px-8 max-w-4xl font-sans">
+      <div className="sticky top-0 z-30 bg-gray-100/90 backdrop-blur-sm pt-6 pb-3">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-widest mb-0.5">Medical Notes</p>
+            <h1 className="text-2xl font-bold text-gray-900 leading-none">All Posts</h1>
+          </div>
+          <div className="hidden sm:block h-9 w-28 rounded-lg bg-gray-200 animate-pulse" />
+        </div>
+        <div className="mb-5 h-10 rounded-xl bg-white border border-gray-200 shadow-sm" />
+      </div>
+      <div className="pb-8 space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="p-6 bg-white rounded-lg shadow animate-pulse">
+            <div className="h-3 bg-gray-200 rounded w-24 mb-3" />
+            <div className="space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-full" />
+              <div className="h-4 bg-gray-200 rounded w-5/6" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </main>
+  );
+}
+
+function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [inputValue, setInputValue] = useState('');
   const router = useRouter();
@@ -260,5 +288,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         {children}
       </div>
     </main>
+  );
+}
+
+export default function MainLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<MainLayoutFallback />}>
+      <MainLayoutContent>{children}</MainLayoutContent>
+    </Suspense>
   );
 }

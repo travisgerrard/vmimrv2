@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
 
+export const runtime = 'edge';
+
 export async function POST(req: NextRequest) {
   const { post_id, feedback } = await req.json();
   if (!post_id) {
@@ -91,7 +93,3 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ summary: saved.summary_text, id: saved.id });
 }
-
-export const config = {
-  runtime: 'edge',
-}; 

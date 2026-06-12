@@ -1,33 +1,36 @@
 "use client";
 
 import { SWRConfig } from "swr";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 
 function localStorageProvider() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const map = new Map<string, any>(JSON.parse(localStorage.getItem('app-cache') || '[]'));
-  window.addEventListener('beforeunload', () => {
-    const appCache = JSON.stringify(Array.from(map.entries()));
-    localStorage.setItem('app-cache', appCache);
-  });
+  if (typeof window === "undefined") return new Map();
+
+  let map = new Map<string, unknown>();
+  try {
+    map = new Map<string, unknown>(JSON.parse(localStorage.getItem("app-cache") || "[]"));
+  } catch {
+    map = new Map<string, unknown>();
+  }
+
+  const persistCache = () => {
+    try {
+      localStorage.setItem("app-cache", JSON.stringify(Array.from(map.entries())));
+    } catch {
+      // Ignore quota/private-mode failures; SWR still keeps the in-memory cache.
+    }
+  };
+
+  window.addEventListener("pagehide", persistCache);
   return map;
 }
 
 export default function SWRProvider({ children }: { children: React.ReactNode }) {
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  if (!isClient) {
-    // Optionally, render nothing or a fallback while waiting for client
-    return null;
-  }
+  const swrConfig = useMemo(() => ({ provider: localStorageProvider }), []);
 
   return (
-    <SWRConfig value={{ provider: localStorageProvider }}>
+    <SWRConfig value={swrConfig}>
       {children}
     </SWRConfig>
   );
-} 
+}

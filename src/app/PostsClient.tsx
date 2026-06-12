@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useLayoutEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
 import Image from "next/image";
 import { useRouter, useSearchParams } from 'next/navigation';
+
+const PAGE_SIZE = 20;
+const POSTS_CACHE_KEY = 'postsCache';
 
 // Define Post type
 export type Post = {
@@ -24,6 +27,64 @@ type Props = {
   initialPosts: Post[];
 };
 
+function readPostsCache(): Post[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const cached = sessionStorage.getItem(POSTS_CACHE_KEY);
+    return cached ? JSON.parse(cached) as Post[] : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePostsCache(posts: Post[]) {
+  try {
+    sessionStorage.setItem(POSTS_CACHE_KEY, JSON.stringify(posts));
+  } catch {
+    // Ignore storage quota/private-mode failures; rendering should not depend on cache writes.
+  }
+}
+
+async function attachMediaInfo(posts: Post[]): Promise<Post[]> {
+  if (posts.length === 0) return posts;
+
+  const postIds = posts.map((p) => p.id);
+  const { data: mediaFiles, error: mediaError } = await supabase
+    .from("media_files")
+    .select("post_id, file_path, file_type")
+    .in("post_id", postIds);
+
+  if (mediaError || !mediaFiles) {
+    return posts.map((post) => ({
+      ...post,
+      imagePaths: post.imagePaths || [],
+      hasPdf: post.hasPdf || false,
+    }));
+  }
+
+  const postMediaInfo: Record<string, { imagePaths: string[]; hasPdf: boolean }> = {};
+  mediaFiles.forEach((file) => {
+    if (!file.post_id || !file.file_path) return;
+    if (!postMediaInfo[file.post_id]) {
+      postMediaInfo[file.post_id] = { imagePaths: [], hasPdf: false };
+    }
+    if (file.file_type?.includes("pdf")) {
+      postMediaInfo[file.post_id].hasPdf = true;
+    }
+    if (file.file_type?.startsWith("image/")) {
+      if (!postMediaInfo[file.post_id].imagePaths.includes(file.file_path)) {
+        postMediaInfo[file.post_id].imagePaths.push(file.file_path);
+      }
+    }
+  });
+
+  return posts.map((post) => ({
+    ...post,
+    user_id: post.user_id || '',
+    imagePaths: postMediaInfo[post.id]?.imagePaths || [],
+    hasPdf: postMediaInfo[post.id]?.hasPdf || false,
+  }));
+}
 
 // Strip markdown image syntax for card previews, return text and extracted image URLs
 function stripMarkdownImages(content: string): { text: string; inlineImageUrls: string[] } {
@@ -138,29 +199,37 @@ function PostsSkeleton() {
 }
 
 export default function PostsClient({ initialPosts }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [session, setSession] = useState<Session | null>(null);
-  const [posts, setPosts] = useState<Post[]>(() => {
-    if (typeof window === 'undefined') return initialPosts;
-    try {
-      const cached = sessionStorage.getItem('postsCache');
-      if (cached) return JSON.parse(cached) as Post[];
-    } catch { /* ignore */ }
-    return initialPosts;
-  });
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [loadingSession, setLoadingSession] = useState(true);
-  const [loadingPosts, setLoadingPosts] = useState(false);
+  const [loadingPosts, setLoadingPosts] = useState(initialPosts.length === 0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMorePosts, setHasMorePosts] = useState(true);
+  const [nextPage, setNextPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const postsContainerRef = useRef<HTMLDivElement | null>(null);
   const firstFetchComplete = useRef<boolean>(
-    typeof window !== 'undefined' && !!sessionStorage.getItem('postsCache')
+    initialPosts.length > 0
   );
-  const router = useRouter();
-  const searchParams = useSearchParams();
 
   // Filters and search term are driven by URL params (managed by the layout)
   const searchTerm = searchParams?.get('q') || '';
   const showOnlyMine = searchParams?.get('mine') === '1';
   const showOnlyStarred = searchParams?.get('starred') === '1';
+
+  useEffect(() => {
+    if (searchTerm.trim() || showOnlyMine || showOnlyStarred) return;
+
+    const cachedPosts = readPostsCache();
+    if (!cachedPosts || cachedPosts.length === 0) return;
+
+    setPosts(cachedPosts);
+    setHasMorePosts(cachedPosts.length === PAGE_SIZE);
+    firstFetchComplete.current = true;
+    setLoadingPosts(false);
+  }, [searchTerm, showOnlyMine, showOnlyStarred]);
 
   // Fetch session and listen for changes
   useEffect(() => {
@@ -174,85 +243,111 @@ export default function PostsClient({ initialPosts }: Props) {
       if (!session) {
         setPosts([]);
         setError(null);
+        setHasMorePosts(false);
       }
     });
     return () => subscription?.unsubscribe();
   }, []);
 
-  // Fetch posts when session, searchTerm, or mine-filter changes
+  const fetchPostsPage = useCallback(async (pageIndex: number) => {
+    let queryBuilder = supabase
+      .from("posts")
+      .select("id, created_at, content, tags, is_starred, user_id")
+      .order("created_at", { ascending: false })
+      .range(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE - 1);
+
+    if (session && showOnlyMine) {
+      queryBuilder = queryBuilder.eq("user_id", session.user.id);
+    }
+    if (showOnlyStarred) {
+      queryBuilder = queryBuilder.eq("is_starred", true);
+    }
+    if (searchTerm.trim()) {
+      // Full-text search on the indexed fts column (stemming + ranking),
+      // OR exact tag match. Sanitise the term to keep PostgREST syntax clean.
+      const term = searchTerm.trim().replace(/[(),]/g, ' ').trim();
+      queryBuilder = queryBuilder.or(
+        `fts.plfts(english).${term},tags.cs.{${term}}`
+      );
+    }
+
+    const { data: postsData, error: fetchError } = await queryBuilder;
+    if (fetchError) throw fetchError;
+
+    const postsPage: Post[] = (postsData || []).map((post) => ({
+      ...post,
+      user_id: (post as { user_id?: string }).user_id || '',
+    }));
+
+    return attachMediaInfo(postsPage);
+  }, [session, searchTerm, showOnlyMine, showOnlyStarred]);
+
+  // Fetch the first small page after auth resolves. Cached posts render immediately while this refreshes.
   useEffect(() => {
+    if (loadingSession) return;
+    if (showOnlyMine && !session) {
+      setPosts([]);
+      setHasMorePosts(false);
+      firstFetchComplete.current = true;
+      setLoadingPosts(false);
+      return;
+    }
+
+    let cancelled = false;
     const fetchAndSetPosts = async () => {
       setLoadingPosts(true);
       setError(null);
       try {
-        let queryBuilder = supabase
-          .from("posts")
-          .select("id, created_at, content, tags, is_starred, user_id")
-          .order("created_at", { ascending: false });
-        if (session && showOnlyMine) {
-          queryBuilder = queryBuilder.eq("user_id", session.user.id);
-        }
-        if (searchTerm.trim()) {
-          // Full-text search on the indexed fts column (stemming + ranking),
-          // OR exact tag match. Sanitise the term to keep PostgREST syntax clean.
-          const term = searchTerm.trim().replace(/[(),]/g, ' ').trim();
-          queryBuilder = queryBuilder.or(
-            `fts.plfts(english).${term},tags.cs.{${term}}`
-          );
-        }
-        const { data: postsData, error: fetchError } = await queryBuilder;
-        if (fetchError) throw fetchError;
-        let postsWithImages: Post[] = (postsData || []).map((post) => ({
-          ...post,
-          user_id: (post as { user_id?: string }).user_id || '',
-        }));
-        if (postsWithImages.length > 0) {
-          const postIds = postsWithImages.map((p) => p.id);
-          const { data: mediaFiles, error: mediaError } = await supabase
-            .from("media_files")
-            .select("post_id, file_path, file_type")
-            .in("post_id", postIds);
-          if (!mediaError && mediaFiles) {
-            const postMediaInfo: Record<string, { imagePaths: string[]; hasPdf: boolean }> = {};
-            mediaFiles.forEach((file) => {
-              if (!file.post_id || !file.file_path) return;
-              if (!postMediaInfo[file.post_id]) {
-                postMediaInfo[file.post_id] = { imagePaths: [], hasPdf: false };
-              }
-              if (file.file_type?.includes("pdf")) {
-                postMediaInfo[file.post_id].hasPdf = true;
-              }
-              if (file.file_type?.startsWith("image/")) {
-                if (!postMediaInfo[file.post_id].imagePaths.includes(file.file_path)) {
-                  postMediaInfo[file.post_id].imagePaths.push(file.file_path);
-                }
-              }
-            });
-            postsWithImages = postsWithImages.map((post) => ({
-              ...post,
-              user_id: post.user_id || '',
-              imagePaths: postMediaInfo[post.id]?.imagePaths || [],
-              hasPdf: postMediaInfo[post.id]?.hasPdf || false,
-            }));
-          }
-        }
+        const postsWithImages = await fetchPostsPage(0);
+        if (cancelled) return;
+
         setPosts(postsWithImages);
+        setNextPage(1);
+        setHasMorePosts(postsWithImages.length === PAGE_SIZE);
         firstFetchComplete.current = true;
-        sessionStorage.setItem('postsCache', JSON.stringify(postsWithImages));
+        if (!searchTerm.trim() && !showOnlyMine && !showOnlyStarred) {
+          writePostsCache(postsWithImages);
+        }
       } catch (err) {
+        if (cancelled) return;
         const message = err instanceof Error ? err.message : "An unknown error occurred";
         setError(`Failed to load posts: ${message}`);
         setPosts([]);
+        setHasMorePosts(false);
       } finally {
-        setLoadingPosts(false);
+        if (!cancelled) setLoadingPosts(false);
       }
     };
-    fetchAndSetPosts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, searchTerm, showOnlyMine]);
 
-  const getPublicImageUrl = (path: string): string =>
-    supabase.storage.from("post-media").getPublicUrl(path).data.publicUrl;
+    fetchAndSetPosts();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchPostsPage, loadingSession, searchTerm, showOnlyMine, showOnlyStarred, session]);
+
+  const loadMorePosts = useCallback(async () => {
+    if (loadingMore || loadingPosts || !hasMorePosts) return;
+
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const postsWithImages = await fetchPostsPage(nextPage);
+      setPosts((currentPosts) => {
+        const merged = [...currentPosts, ...postsWithImages];
+        return Array.from(new Map(merged.map((post) => [post.id, post])).values());
+      });
+      setNextPage((page) => page + 1);
+      setHasMorePosts(postsWithImages.length === PAGE_SIZE);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "An unknown error occurred";
+      setError(`Failed to load more posts: ${message}`);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [fetchPostsPage, hasMorePosts, loadingMore, loadingPosts, nextPage]);
+
+  const getPublicImageUrl = useCallback((path: string): string =>
+    supabase.storage.from("post-media").getPublicUrl(path).data.publicUrl, []);
 
   // Restore scroll position robustly: wait until posts are rendered in the DOM
   useEffect(() => {
@@ -307,82 +402,9 @@ export default function PostsClient({ initialPosts }: Props) {
     return () => clearTimeout(timer);
   }, [posts]);
 
-  // Background refresh: fetch new posts and prepend if found
-  useEffect(() => {
-    if (!session) return;
-    (async () => {
-      try {
-        const queryBuilder = supabase
-          .from("posts")
-          .select("id, created_at, content, tags, is_starred")
-          .eq("user_id", session.user.id)
-          .order("created_at", { ascending: false });
-        const { data: postsData, error: fetchError } = await queryBuilder;
-        if (fetchError) throw fetchError;
-        let postsWithImages: Post[] = (postsData || []).map((post) => ({
-          ...post,
-          user_id: (post as { user_id?: string }).user_id || '',
-        }));
-        if (postsWithImages.length > 0) {
-          const postIds = postsWithImages.map((p) => p.id);
-          const { data: mediaFiles, error: mediaError } = await supabase
-            .from("media_files")
-            .select("post_id, file_path, file_type")
-            .in("post_id", postIds);
-          if (!mediaError && mediaFiles) {
-            const postMediaInfo: Record<string, { imagePaths: string[]; hasPdf: boolean }> = {};
-            mediaFiles.forEach((file) => {
-              if (!file.post_id || !file.file_path) return;
-              if (!postMediaInfo[file.post_id]) {
-                postMediaInfo[file.post_id] = { imagePaths: [], hasPdf: false };
-              }
-              if (file.file_type?.includes("pdf")) {
-                postMediaInfo[file.post_id].hasPdf = true;
-              }
-              if (file.file_type?.startsWith("image/")) {
-                if (!postMediaInfo[file.post_id].imagePaths.includes(file.file_path)) {
-                  postMediaInfo[file.post_id].imagePaths.push(file.file_path);
-                }
-              }
-            });
-            postsWithImages = postsWithImages.map((post) => ({
-              ...post,
-              user_id: post.user_id || '',
-              imagePaths: postMediaInfo[post.id]?.imagePaths || [],
-              hasPdf: postMediaInfo[post.id]?.hasPdf || false,
-            }));
-          }
-        }
-        // Prepend new posts if found
-        if (postsWithImages.length > 0 && posts.length > 0 && postsWithImages[0].id !== posts[0].id) {
-          // Find new posts not in current list
-          const newPosts = postsWithImages.filter(p => !posts.some(q => q.id === p.id));
-          if (newPosts.length > 0) {
-            // Merge and deduplicate by id
-            const merged = [...newPosts, ...posts];
-            const deduped = Array.from(new Map(merged.map(p => [p.id, p])).values());
-            setPosts(deduped);
-          }
-        } else if (postsWithImages.length > 0 && posts.length === 0) {
-          setPosts(postsWithImages);
-        }
-      } catch {
-        // Ignore background errors
-      }
-    })();
-  }, [session]);
-
-  useEffect(() => {
-    if (session) {
-      console.log('Current session user ID:', session.user.id);
-    } else {
-      console.log('No user session');
-    }
-  }, [session]);
-
   const renderPostsList = useMemo(() => {
     // Show skeleton until the first real fetch completes — prevents flash of stale cached data
-    if (!firstFetchComplete.current && loadingPosts) {
+    if (!firstFetchComplete.current && loadingPosts && posts.length === 0) {
       return <PostsSkeleton />;
     }
 
@@ -423,11 +445,12 @@ export default function PostsClient({ initialPosts }: Props) {
     }
     if (visiblePosts.length > 0) {
       return (
-        <div ref={postsContainerRef} className="space-y-4">
-          {visiblePosts.map((post) => {
-            const accent = getAccentColor(post.tags);
-            const colors = COLOR_CONFIG[accent];
-            return (
+        <>
+          <div ref={postsContainerRef} className="space-y-4">
+            {visiblePosts.map((post) => {
+              const accent = getAccentColor(post.tags);
+              const colors = COLOR_CONFIG[accent];
+              return (
             <Link href={`/posts/${post.id}`} legacyBehavior passHref key={post.id}>
               <a
                 className="block bg-white rounded-xl shadow-sm border border-gray-100 px-5 py-4 hover:shadow-md transition-shadow duration-150 cursor-pointer focus:ring-2 focus:ring-blue-500"
@@ -533,17 +556,26 @@ export default function PostsClient({ initialPosts }: Props) {
                 )}
               </a>
             </Link>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          {hasMorePosts && (
+            <div className="py-5 text-center">
+              <button
+                type="button"
+                onClick={loadMorePosts}
+                disabled={loadingMore}
+                className="text-sm font-medium text-blue-600 hover:text-blue-700 disabled:text-gray-400"
+              >
+                {loadingMore ? 'Loading more...' : 'Load more'}
+              </button>
+            </div>
+          )}
+        </>
       );
     }
     return null;
-  }, [posts, showOnlyMine, showOnlyStarred, session, loadingPosts, error, searchTerm, getPublicImageUrl]);
-
-  if (loadingSession) {
-    return <p className="text-center text-gray-400 py-8 text-sm">Loading...</p>;
-  }
+  }, [posts, showOnlyMine, showOnlyStarred, session, loadingPosts, error, searchTerm, getPublicImageUrl, hasMorePosts, loadMorePosts, loadingMore, router]);
 
   return <>{renderPostsList}</>;
-} 
+}

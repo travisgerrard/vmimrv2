@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useLayoutEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
@@ -105,11 +105,27 @@ export default function PostDetailClient({
   const [patientSummary, setPatientSummary] = useState<PatientSummary | null>(null);
   const [patientSummaryLoading, setPatientSummaryLoading] = useState(false);
   const [patientSummaryError, setPatientSummaryError] = useState<string | null>(null);
+  const [patientSummarySignInRequired, setPatientSummarySignInRequired] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const patientSummaryRequest = useRef(0);
+  const latestSummaryViewer = useRef<string | null>(null);
+  const authStateVersion = useRef(0);
   const [showShareUrl, setShowShareUrl] = useState(false);
   const params = useParams();
   const router = useRouter();
   const postId = params?.id as string;
+  const summaryPostId = post?.id;
+  const summaryOwnerId = post?.user_id;
+  const summaryViewerId = session?.user.id;
+  const canManagePatientSummary = Boolean(
+    summaryPostId && summaryViewerId && summaryOwnerId === summaryViewerId && post?.tags?.includes('patient')
+  );
+  const updateSession = useCallback((nextSession: Session | null) => {
+    const nextViewerId = nextSession?.user.id ?? null;
+    if (latestSummaryViewer.current !== nextViewerId) patientSummaryRequest.current += 1;
+    latestSummaryViewer.current = nextViewerId;
+    setSession(nextSession);
+  }, []);
 
   useLayoutEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,9 +142,10 @@ export default function PostDetailClient({
       setLoading(!initialPost);
       setError(null);
       try {
+        const sessionVersion = authStateVersion.current;
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
-        setSession(currentSession);
+        if (authStateVersion.current === sessionVersion) updateSession(currentSession);
         if (!postId) { setError("Post ID is missing."); setLoading(false); return; }
         if (initialPost?.id === postId) {
           checkSummaryStatus(initialPost, initialMediaFiles);
@@ -144,9 +161,12 @@ export default function PostDetailClient({
       }
     };
     checkSessionAndFetch();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      authStateVersion.current += 1;
+      updateSession(session);
+    });
     return () => subscription?.unsubscribe();
-  }, [postId, router, initialPost, initialMediaFiles]);
+  }, [postId, router, initialPost, initialMediaFiles, updateSession]);
 
   const fetchPost = async (id: string) => {
     try {
@@ -281,31 +301,81 @@ export default function PostDetailClient({
     return () => { supabase.removeChannel(channel); };
   }, [postId, post, mediaFiles]);
 
+  useLayoutEffect(() => {
+    patientSummaryRequest.current += 1;
+    setPatientSummary(null);
+    setPatientSummaryLoading(false);
+    setPatientSummaryError(null);
+    setFeedback('');
+    if (summaryViewerId) setPatientSummarySignInRequired(false);
+    return () => { patientSummaryRequest.current += 1; };
+  }, [summaryPostId, summaryOwnerId, summaryViewerId]);
+
   useEffect(() => {
+    if (!summaryPostId) return;
+    const requestId = ++patientSummaryRequest.current;
+    const requestViewerId = summaryViewerId ?? null;
+    let cancelled = false;
+    const isCurrentRequest = () => !cancelled && patientSummaryRequest.current === requestId && latestSummaryViewer.current === requestViewerId;
     const fetchExistingPatientSummary = async () => {
-      if (!post) return;
       setPatientSummaryLoading(true);
+      setPatientSummaryError(null);
       try {
-        const { data } = await supabase.from('patient_summaries').select('*').eq('post_id', post.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-        setPatientSummary(data?.summary_text ? { id: data.id, summary: data.summary_text } : null);
-      } catch { /* ignore */ } finally {
-        setPatientSummaryLoading(false);
+        const { data, error: fetchError } = await supabase.from('patient_summaries')
+          .select('id, summary_text')
+          .eq('post_id', summaryPostId)
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (fetchError) throw new Error(fetchError.message);
+        if (isCurrentRequest()) setPatientSummary(data?.summary_text ? { id: data.id, summary: data.summary_text } : null);
+      } catch (err) {
+        if (isCurrentRequest()) setPatientSummaryError(err instanceof Error ? err.message : 'Could not load patient summary.');
+      } finally {
+        if (isCurrentRequest()) setPatientSummaryLoading(false);
       }
     };
     fetchExistingPatientSummary();
-  }, [post]);
+    return () => { cancelled = true; };
+  }, [summaryPostId, summaryOwnerId, summaryViewerId]);
 
   const handleGeneratePatientSummary = async (customFeedback?: string) => {
     if (!post) return;
+    const requestId = ++patientSummaryRequest.current;
+    const isCurrentRequest = () => patientSummaryRequest.current === requestId && latestSummaryViewer.current === post.user_id;
     setPatientSummaryLoading(true);
     setPatientSummaryError(null);
     try {
-      const res = await fetch('/api/patient-summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ post_id: post.id, feedback: customFeedback || '' }) });
+      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+      if (!isCurrentRequest()) return;
+      if (sessionError || !currentSession) {
+        setPatientSummarySignInRequired(true);
+        updateSession(null);
+        setPatientSummary(null);
+        setPatientSummaryLoading(false);
+        return;
+      }
+      if (currentSession.user.id !== post.user_id) {
+        updateSession(currentSession);
+        setPatientSummary(null);
+        setPatientSummaryLoading(false);
+        return;
+      }
+      const res = await fetch('/api/patient-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentSession.access_token}` },
+        body: JSON.stringify({ post_id: post.id, feedback: customFeedback || '' }),
+      });
+      if (!isCurrentRequest()) return;
+      if (res.status === 204) { setPatientSummary(null); return; }
       const data = await res.json();
-      if (res.ok && data.summary) { setPatientSummary({ id: data.id, summary: data.summary }); setFeedback(''); }
-      else setPatientSummaryError(data.error || 'Failed to generate patient summary.');
-    } catch { setPatientSummaryError('Failed to generate patient summary.'); }
-    finally { setPatientSummaryLoading(false); }
+      if (!isCurrentRequest()) return;
+      if (!res.ok || !data.summary) throw new Error(data.error || 'Failed to generate patient summary.');
+      setPatientSummary({ id: data.id, summary: data.summary });
+      setFeedback('');
+    } catch (err) {
+      if (isCurrentRequest()) setPatientSummaryError(err instanceof Error ? err.message : 'Failed to generate patient summary.');
+    } finally {
+      if (isCurrentRequest()) setPatientSummaryLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -447,6 +517,11 @@ export default function PostDetailClient({
       )}
 
       {/* ── Patient summary ─────────────────────────────────────── */}
+      {patientSummarySignInRequired && !summaryViewerId && (
+        <p role="alert" className="mb-4 text-sm text-red-600">
+          Please <Link href="/login" className="underline">sign in</Link> to generate a patient-friendly summary.
+        </p>
+      )}
       <PatientSummarySection
         patientSummary={patientSummary}
         patientSummaryLoading={patientSummaryLoading}
@@ -454,6 +529,7 @@ export default function PostDetailClient({
         feedback={feedback}
         setFeedback={setFeedback}
         handleGeneratePatientSummary={handleGeneratePatientSummary}
+        canManagePatientSummary={canManagePatientSummary}
         post={post}
       />
 
